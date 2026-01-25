@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ error: any }>;
   logout: () => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
+  signInWithProvider: (provider: 'google' | 'apple') => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -126,6 +126,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return { error };
   };
 
+  const signInWithProvider = async (provider: 'google' | 'apple') => {
+    setIsLoading(true);
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+    if (error) setIsLoading(false);
+    return { error };
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -138,7 +150,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       isLoading,
       login,
       logout,
-      signUp
+      signUp,
+      signInWithProvider
     }}>
       {children}
     </AuthContext.Provider>
