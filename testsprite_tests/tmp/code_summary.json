@@ -1,0 +1,90 @@
+{
+  "tech_stack": [
+    "TypeScript",
+    "React",
+    "Vite",
+    "Supabase",
+    "Tailwind CSS"
+  ],
+  "features": [
+    {
+      "name": "Auth",
+      "description": "Authentication page handling login and signup",
+      "files": [
+        "pages/Auth.tsx"
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "description": "Main dashboard showing overview metrics",
+      "files": [
+        "pages/Dashboard.tsx"
+      ]
+    },
+    {
+      "name": "Projects",
+      "description": "Project management and listing",
+      "files": [
+        "pages/Projects.tsx"
+      ]
+    },
+    {
+      "name": "ProjectFinances",
+      "description": "Financial details for specific projects",
+      "files": [
+        "pages/ProjectFinances.tsx"
+      ]
+    },
+    {
+      "name": "Financial",
+      "description": "General financial overview",
+      "files": [
+        "pages/Financial.tsx"
+      ]
+    },
+    {
+      "name": "Calculator",
+      "description": "Pricing calculator functionality",
+      "files": [
+        "pages/Calculator.tsx"
+      ]
+    },
+    {
+      "name": "Clients",
+      "description": "Client management CRM",
+      "files": [
+        "pages/Clients.tsx"
+      ]
+    },
+    {
+      "name": "Proposals",
+      "description": "Proposal management",
+      "files": [
+        "pages/Proposals.tsx",
+        "pages/Proposal.tsx"
+      ]
+    },
+    {
+      "name": "Providers",
+      "description": "Service providers management",
+      "files": [
+        "pages/Providers.tsx"
+      ]
+    },
+    {
+      "name": "Receipts",
+      "description": "Receipt management",
+      "files": [
+        "pages/Receipts.tsx"
+      ]
+    },
+    {
+      "name": "App Navigation",
+      "description": "Main application layout and routing",
+      "files": [
+        "App.tsx",
+        "index.html"
+      ]
+    }
+  ]
+}

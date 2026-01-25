@@ -1,0 +1,452 @@
+[
+  {
+    "id": "TC001",
+    "title": "Email Authentication Success",
+    "description": "Verify that a user can successfully log in using valid Email credentials via Supabase Auth.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page."
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid registered Email and correct password."
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify login is successful and user is redirected to the Dashboard."
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Email Authentication Failure with Incorrect Password",
+    "description": "Ensure the system properly handles login attempts with incorrect passwords for Email authentication.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page."
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid registered Email and an incorrect password."
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify login fails with appropriate error message and user remains on the login page."
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Dashboard Metrics Display",
+    "description": "Verify the Dashboard page correctly loads and displays all project statistics, total revenue, open proposals, and active construction sites.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in successfully and navigate to the Dashboard page."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that project statistics are correctly fetched and displayed."
+      },
+      {
+        "type": "assertion",
+        "description": "Validate total revenue is accurately shown."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the count and details of open proposals are visible."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify active construction sites are listed correctly."
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Dashboard Load Failure Handling",
+    "description": "Ensure the Dashboard page displays meaningful error messages when backend metrics fail to load.",
+    "category": "error handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate backend failure or network error during Dashboard data fetch."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to the Dashboard page."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that appropriate error notifications or messages are displayed to the user."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that the UI does not crash and user can retry or navigate elsewhere."
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Create New Construction Project",
+    "description": "Verify that users can create a new construction project with mandatory fields including budget and inspection data.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in and navigate to the Projects page."
+      },
+      {
+        "type": "action",
+        "description": "Click 'Create New Project' button."
+      },
+      {
+        "type": "action",
+        "description": "Input valid project name, description, budget amount, and inspection details."
+      },
+      {
+        "type": "action",
+        "description": "Submit the new project form."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the new project is listed in the Projects page with correct details."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Project Creation with Missing Required Fields",
+    "description": "Ensure project creation form validation prevents submission when mandatory fields are missing or invalid.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the Projects page and select to create a new project."
+      },
+      {
+        "type": "action",
+        "description": "Leave mandatory fields such as project name or budget blank."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to submit the form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify form validation messages are shown and submission is blocked."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Edit Existing Project",
+    "description": "Verify the user can update details of an existing construction project including budget and inspection data.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the Projects page."
+      },
+      {
+        "type": "action",
+        "description": "Select an existing project from the list."
+      },
+      {
+        "type": "action",
+        "description": "Modify project name, budget, or inspection information."
+      },
+      {
+        "type": "action",
+        "description": "Save the updates."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that the updated project details are saved and reflected in the project list."
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Delete Construction Project",
+    "description": "Ensure the user can delete a construction project and it is removed from the project listing.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the Projects page."
+      },
+      {
+        "type": "action",
+        "description": "Select a project and click the delete option."
+      },
+      {
+        "type": "action",
+        "description": "Confirm the deletion action."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the project is removed from the project list."
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Update User Profile Information",
+    "description": "Verify that the user can update personal profile information in the Settings page and changes persist after reload.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the Settings page."
+      },
+      {
+        "type": "action",
+        "description": "Change fields such as user name, email (if allowed), and other profile details."
+      },
+      {
+        "type": "action",
+        "description": "Save the changes."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify changes are saved and persist after navigating away and returning to Settings."
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Update Company Details with Logo and CNPJ",
+    "description": "Check that company details including the logo and CNPJ can be updated and are shown correctly in Settings.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the Settings page."
+      },
+      {
+        "type": "action",
+        "description": "Update company name, upload a new logo image, and enter valid CNPJ information."
+      },
+      {
+        "type": "action",
+        "description": "Save all updates."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the company details including logo and CNPJ display correctly on the Settings screen and persist."
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Theme Toggle Light to Dark Mode",
+    "description": "Verify the user can toggle between light and dark themes in the Settings page or sidebar toggle control, and theme persists on reload.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Locate and use the theme toggle control on sidebar or in Settings."
+      },
+      {
+        "type": "action",
+        "description": "Switch from light mode to dark mode and observe UI changes."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify UI updates accordingly to chosen theme colors."
+      },
+      {
+        "type": "action",
+        "description": "Reload the application or revisit the page."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the selected theme preference is retained and applied."
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Responsive Layout on Different Screen Sizes",
+    "description": "Check that the app layout including sidebar navigation adapts properly to different screen widths, including mobile and desktop resolutions.",
+    "category": "ui",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Resize the browser window to various widths including small (mobile) and large (desktop) resolutions."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the sidebar navigation collapses or expands appropriately."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm all content remains visible and UI elements are usable at each resolution."
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Construction Cost Calculator Accuracy with Valid Inputs",
+    "description": "Verify that the cost estimation calculator computes accurate construction costs based on given input parameters.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the Calculator page."
+      },
+      {
+        "type": "action",
+        "description": "Input valid project parameters such as area size, material types, labor hours, and other relevant costs."
+      },
+      {
+        "type": "action",
+        "description": "Trigger the calculation."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the resulting cost estimate reflects input values and expected cost formulas."
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Calculator Input Validation and Error Handling",
+    "description": "Ensure the calculator prevents invalid or missing inputs and shows appropriate error messages.",
+    "category": "error handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the Calculator tool."
+      },
+      {
+        "type": "action",
+        "description": "Enter invalid values such as negative numbers, non-numeric inputs, or leave required fields blank."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to compute the cost estimation."
+      },
+      {
+        "type": "assertion",
+        "description": "Validate error messages display for invalid inputs and calculation is blocked."
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Integration Success with Supabase Edge Functions",
+    "description": "Verify that calls to Supabase Edge Functions succeed and return expected results when invoked from the application.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Trigger application features that rely on Supabase Edge Function calls (e.g., data fetching, AI requests)."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that calls return successful responses with correct data."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm UI updates reflect the received data accurately."
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Error Handling for Supabase Edge Functions Failures",
+    "description": "Ensure the application properly handles failed calls to Supabase Edge Functions and displays meaningful error messages to the user.",
+    "category": "error handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate failures or timeouts in Supabase Edge Function calls."
+      },
+      {
+        "type": "action",
+        "description": "Perform actions triggering these calls."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that user-friendly error messages are shown."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the application does not crash and offers retry or graceful degradation."
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Integration Success with Gemini AI API",
+    "description": "Validate that functions utilizing Gemini AI services via integration return successful AI-powered results and update the UI accordingly.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Execute features that rely on Gemini AI integration such as advanced backend processing."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify AI responses are received and the interface reflects these outputs properly."
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Error Handling for Gemini AI API Failures",
+    "description": "Ensure appropriate handling and user notification on failures or invalid responses from Gemini AI integration.",
+    "category": "error handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate Gemini AI API failure scenarios."
+      },
+      {
+        "type": "action",
+        "description": "Trigger dependent application functionalities."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify meaningful error messages are displayed."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that the app continues to operate without crashing."
+      }
+    ]
+  }
+]

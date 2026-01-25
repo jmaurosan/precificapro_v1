@@ -65,58 +65,121 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className={`min-h-screen flex ${effectiveTheme === 'dark' ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`min-h-screen flex ${effectiveTheme === 'dark' ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'} transition-colors duration-300`}>
+      {/* Backdrop com blur premium */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/60 z-20 lg:hidden backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 bg-black/70 z-20 lg:hidden backdrop-blur-md animate-fade-in"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
-      <aside className={`fixed lg:static inset-y-0 left-0 z-30 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      {/* Sidebar Premium */}
+      <aside className={`fixed lg:static inset-y-0 left-0 z-30 w-72 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 shadow-xl lg:shadow-none transform transition-all duration-500 ease-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-100 dark:border-gray-800">
-            <h1 className="text-xl font-black bg-gradient-to-r from-indigo-600 to-cyan-500 bg-clip-text text-transparent">PrecificaPro</h1>
-            <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"><X size={20} /></button>
+          {/* Header com gradiente */}
+          <div className="relative flex items-center justify-between h-20 px-6 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-teal-500/30">
+                <span className="text-white font-black text-lg">P</span>
+              </div>
+              <h1 className="text-xl font-black text-gradient-primary">PrecificaPro</h1>
+            </div>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-2 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-all duration-200"
+            >
+              <X size={20} />
+            </button>
           </div>
 
-          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-            {menuItems.map((item) => {
+          {/* Navegação Premium */}
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+            {menuItems.map((item, index) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
               return (
-                <button key={item.path} onClick={() => handleNavigate(item.path)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-extrabold shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 font-bold'}`}>
-                  <Icon size={20} className={isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'} />
-                  <span className="text-sm">{item.label}</span>
+                <button
+                  key={item.path}
+                  onClick={() => handleNavigate(item.path)}
+                  className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden animate-slide-up ${isActive
+                      ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold shadow-lg shadow-teal-500/30 scale-[1.02]'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 font-semibold hover:-translate-y-0.5 hover:shadow-md'
+                    }`}
+                  style={{ animationDelay: `${index * 30}ms` }}
+                >
+                  {/* Glow effect no hover */}
+                  {!isActive && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-teal-500/0 via-teal-500/5 to-teal-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  )}
+
+                  <Icon
+                    size={20}
+                    className={`relative z-10 transition-transform duration-300 ${isActive
+                        ? 'text-white'
+                        : 'text-gray-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 group-hover:scale-110'
+                      }`}
+                  />
+                  <span className="text-sm relative z-10">{item.label}</span>
+
+                  {/* Indicador ativo */}
+                  {isActive && (
+                    <div className="ml-auto w-2 h-2 rounded-full bg-white shadow-lg shadow-white/50" />
+                  )}
                 </button>
               );
             })}
           </nav>
 
-          <div className="p-4 border-t border-gray-100 dark:border-gray-800">
-            <div className="flex items-center gap-3 px-2 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center border border-indigo-200 dark:border-indigo-800">
-                <span className="text-indigo-700 dark:text-indigo-400 font-black">{user?.name?.charAt(0).toUpperCase()}</span>
+          {/* Footer Premium */}
+          <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+            <div className="flex items-center gap-3 px-3 py-3 mb-4 rounded-xl bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center shadow-md">
+                <span className="text-white font-black text-lg">{user?.name?.charAt(0).toUpperCase()}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-extrabold truncate">{user?.name}</p>
-                <p className="text-[10px] font-bold text-gray-500 uppercase">{user?.role}</p>
+                <p className="text-sm font-bold truncate text-gray-900 dark:text-white">{user?.name}</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{user?.role}</p>
               </div>
             </div>
+
             <div className="flex gap-2">
-              <button onClick={toggleTheme} className="flex-1 flex items-center justify-center p-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-gray-600 dark:text-gray-300">{getThemeIcon()}</button>
-              <button onClick={logout} className="flex items-center justify-center p-2.5 bg-red-50 dark:bg-red-900/20 rounded-xl text-red-600"><LogOut size={20} /></button>
+              <button
+                onClick={toggleTheme}
+                className="flex-1 flex items-center justify-center p-3 bg-white dark:bg-gray-800 rounded-xl text-gray-600 dark:text-gray-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                {getThemeIcon()}
+              </button>
+              <button
+                onClick={logout}
+                className="flex items-center justify-center p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-red-600 dark:text-red-400 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+              >
+                <LogOut size={20} />
+              </button>
             </div>
           </div>
         </div>
       </aside>
 
+      {/* Conteúdo Principal */}
       <div className="flex-1 flex flex-col min-h-screen">
-        <header className="lg:hidden h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 sticky top-0 z-10">
-          <button onClick={() => setSidebarOpen(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"><Menu size={24} /></button>
-          <div className="ml-4 font-black text-indigo-600 uppercase tracking-tighter">PrecificaPro</div>
+        {/* Header Mobile Premium */}
+        <header className="lg:hidden h-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center px-4 sticky top-0 z-10 backdrop-blur-lg bg-white/95 dark:bg-gray-900/95">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl text-gray-600 dark:text-gray-300 transition-all duration-200 hover:scale-105 active:scale-95"
+          >
+            <Menu size={24} />
+          </button>
+          <div className="ml-4 font-black text-gradient-primary uppercase tracking-tight text-lg">PrecificaPro</div>
         </header>
-        <main className="flex-1 p-6 lg:p-8 overflow-auto">
-          <div className="max-w-7xl mx-auto">{children}</div>
+
+        {/* Área de Conteúdo com Background Mesh Sutil */}
+        <main className="flex-1 p-6 lg:p-8 overflow-auto bg-mesh">
+          <div className="max-w-7xl mx-auto animate-fade-in">{children}</div>
         </main>
       </div>
+
       <QuickNotes />
     </div>
   );

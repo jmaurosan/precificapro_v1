@@ -1,0 +1,108 @@
+{
+  "meta": {
+    "project": "PrecificaPro",
+    "date": "2026-01-21",
+    "prepared_by": "Software Development Manager"
+  },
+  "product_overview": "PrecificaPro is a construction project management and estimation web application that integrates with Supabase Auth for authentication, providing tools for project tracking, budget management, real-time dashboard metrics, and a construction cost calculator.",
+  "core_goals": [
+    "Enable secure and flexible user authentication via Email, Google, and Apple providers.",
+    "Provide a comprehensive dashboard with key project statistics, active construction sites, revenue, and proposals overview.",
+    "Support efficient creation, management, and inspection tracking of construction projects with budget oversight.",
+    "Allow configuration of user profiles, company details including logo and CNPJ, theme preferences, and notification settings.",
+    "Deliver an intuitive, responsive layout with sidebar navigation and theme toggling.",
+    "Offer a construction cost estimation and pricing calculator tool to aid in project budgeting.",
+    "Integrate with Supabase Edge Functions and Gemini AI for advanced backend functionality."
+  ],
+  "key_features": [
+    "Authentication module supporting Email, Google, and Apple login/signup via Supabase Auth.",
+    "Dashboard displaying project statistics, total revenue, open proposals, and active construction sites.",
+    "Project management module for creating, listing, updating, and inspecting construction projects and budgets.",
+    "Settings page for managing user profile, company information (such as logo and CNPJ), system themes (light/dark), and notification preferences.",
+    "Responsive app layout with sidebar navigation and theme toggle control for better user experience.",
+    "Construction cost estimation calculator to assist users in price calculations.",
+    "Integration utilities for calling Supabase Edge Functions and Gemini AI services for enhanced features."
+  ],
+  "user_flow_summary": [
+    "User signs up or logs in using Email, Google, or Apple authentication providers.",
+    "Upon successful login, user is redirected to the Dashboard displaying their projects and metrics.",
+    "From the Dashboard, user navigates to Projects page to create or manage construction projects with budget and inspection details.",
+    "User configures personal profile, company details, themes, and notifications in the Settings screen.",
+    "User accesses Calculator tool to estimate construction costs and pricing based on project inputs.",
+    "Throughout, user benefits from a responsive UI with an accessible sidebar and can toggle between light and dark theme.",
+    "Backend integrations occur transparently via Supabase Edge Functions and AI-powered services."
+  ],
+  "validation_criteria": [
+    "Authentication works seamlessly via all supported providers and restricts unauthorized access.",
+    "Dashboard loads and correctly displays all metrics fetched from backend services.",
+    "Project management functions allow creation, editing, deletion, and tracking of projects with budget and inspections.",
+    "Settings allow accurate updating and persistence of user profile, company info, themes, and notifications.",
+    "App layout adapts correctly on different screen sizes and maintains theme consistency with toggle.",
+    "Calculator tool performs accurate construction cost estimations reflecting input parameters.",
+    "Integration with Supabase Edge Functions and Gemini AI should be functional, with all calls returning successful results or meaningful error states."
+  ],
+  "code_summary": {
+    "tech_stack": [
+      "TypeScript",
+      "React",
+      "Vite",
+      "Supabase",
+      "Tailwind CSS",
+      "React Router"
+    ],
+    "features": [
+      {
+        "name": "Authentication",
+        "description": "User login and signup using Email, Google, and Apple providers via Supabase Auth.",
+        "files": [
+          "pages/Auth.tsx",
+          "hooks/useAuth.tsx"
+        ]
+      },
+      {
+        "name": "Dashboard",
+        "description": "Main dashboard view showing project statistics, revenue, active construction sites, and open proposals.",
+        "files": [
+          "pages/Dashboard.tsx"
+        ]
+      },
+      {
+        "name": "Project Management",
+        "description": "Module to list, create, and manage construction projects, including budget tracking and inspections.",
+        "files": [
+          "pages/Projects.tsx"
+        ]
+      },
+      {
+        "name": "Settings",
+        "description": "Configuration page for user profile, company details (Logo, CNPJ), system theme (Light/Dark), and notifications.",
+        "files": [
+          "pages/Settings.tsx"
+        ]
+      },
+      {
+        "name": "App Layout",
+        "description": "Main layout component with responsive sidebar navigation and theme toggle.",
+        "files": [
+          "components/Layout.tsx",
+          "App.tsx"
+        ]
+      },
+      {
+        "name": "Calculator",
+        "description": "Construction cost estimation and pricing calculator tool.",
+        "files": [
+          "pages/Calculator.tsx"
+        ]
+      },
+      {
+        "name": "Edge Functions Helper",
+        "description": "Utilities for calling Supabase Edge Functions, including Gemini AI integration.",
+        "files": [
+          "src/lib/edgeFunctions.ts",
+          "src/lib/geminiAPI.ts"
+        ]
+      }
+    ]
+  }
+}

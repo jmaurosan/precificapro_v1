@@ -21,8 +21,16 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-950">
-        <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900">
+        <div className="flex flex-col items-center gap-4 animate-fade-in">
+          <div className="relative">
+            {/* Spinner externo */}
+            <div className="w-16 h-16 border-4 border-teal-100 dark:border-teal-900/30 border-t-teal-500 rounded-full animate-spin"></div>
+            {/* Pulso interno */}
+            <div className="absolute inset-0 w-16 h-16 bg-gradient-to-tr from-teal-500/20 to-emerald-500/20 rounded-full animate-pulse"></div>
+          </div>
+          <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 animate-pulse">Carregando...</p>
+        </div>
       </div>
     );
   }

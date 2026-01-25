@@ -118,9 +118,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     });
 
-    if (data.user && !error) {
-      await supabase.from('profiles').insert([{ id: data.user.id, name }]);
-    }
+
 
     if (error) setIsLoading(false);
     return { error };
