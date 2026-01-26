@@ -51,10 +51,7 @@ const CalculatorPage: React.FC = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState('');
   const [projects, setProjects] = useState<{ id: string, name: string }[]>([]);
-  const [items, setItems] = useState<CalculatorItem[]>([
-    { id: '1', description: 'Instalação de Pontos de Automação', quantity: 12, unitCost: 150, profitMargin: 35, type: 'service' },
-    { id: '2', description: 'Central de Processamento', quantity: 1, unitCost: 2500, profitMargin: 20, type: 'material' },
-  ]);
+  const [items, setItems] = useState<CalculatorItem[]>([]);
 
   // States for Import Modal
   const [showImportModal, setShowImportModal] = useState(false);
@@ -63,11 +60,11 @@ const CalculatorPage: React.FC = () => {
 
   // States for Project Pricing
   const [projectPhases, setProjectPhases] = useState<ProjectPhase[]>([
-    { id: '1', name: 'Levantamento / Briefing', hours: 4 },
-    { id: '2', name: 'Estudo Preliminar', hours: 12 },
-    { id: '3', name: 'Anteprojeto', hours: 16 },
-    { id: '4', name: 'Projeto Executivo', hours: 24 },
-    { id: '5', name: 'Detalhamento de Interiores', hours: 10 },
+    { id: '1', name: 'Levantamento / Briefing', hours: 0 },
+    { id: '2', name: 'Estudo Preliminar', hours: 0 },
+    { id: '3', name: 'Anteprojeto', hours: 0 },
+    { id: '4', name: 'Projeto Executivo', hours: 0 },
+    { id: '5', name: 'Detalhamento de Interiores', hours: 0 },
   ]);
   const [projectArea, setProjectArea] = useState<number>(0);
   const [complexity, setComplexity] = useState<number>(1); // 1.0 standard
@@ -114,12 +111,25 @@ const CalculatorPage: React.FC = () => {
   };
 
   // --- Logic for Construction Calculator ---
-  const handleSaveToProject = () => {
-    // Simulação de salvamento - Futuramente integrar com o backend/contexto real
+  const handleSaveToProject = async () => {
+    if (!selectedProject) return;
+
     const valueToSave = activeTab === 'project' ? suggestedProjectPrice : constructionTotal;
-    alert(`Proposta de R$ ${valueToSave.toLocaleString('pt-BR')} vinculada à obra ${selectedProject}!`);
-    setShowSaveModal(false);
-    navigate('/projects');
+
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ total_budget: valueToSave })
+        .eq('id', selectedProject);
+
+      if (error) throw error;
+
+      alert(`Orçamento de R$ ${valueToSave.toLocaleString('pt-BR')} vinculado com sucesso!`);
+      setShowSaveModal(false);
+      navigate('/projects');
+    } catch (error: any) {
+      alert('Erro ao vincular orçamento: ' + error.message);
+    }
   };
 
   const getSuggestedMargin = (type: 'material' | 'service') => {

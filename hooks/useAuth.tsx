@@ -33,10 +33,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     // 1. Verificar sessão atual
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await fetchProfile(session.user.id, session.user.email!);
-      } else {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          await fetchProfile(data.session.user.id, data.session.user.email!);
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Auth session check failed:", error);
         setIsLoading(false);
       }
     };

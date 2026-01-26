@@ -5,6 +5,7 @@ import {
    Building,
    Camera,
    Check,
+   CheckCircle2,
    ChevronRight,
    ClipboardCheck,
    CloudDownload,
@@ -27,6 +28,7 @@ import { consultarNFPrefeituraCG } from '../services/notaFiscalCGService';
 import { InspectionTemplate, NonConformity, Project } from '../types';
 import { CategoriaCusto, CustoProjeto, StatusCusto } from '../types/custosProjeto';
 import { ParametrosConsultaNFCampoGrande } from '../types/notaFiscalCG';
+import { formatInputCurrency, parseCurrency } from '../utils/formatters';
 import { createWhatsappLink } from '../utils/whatsapp';
 
 const INSPECTION_TEMPLATES: InspectionTemplate[] = [
@@ -104,6 +106,7 @@ const Projects: React.FC = () => {
    const [projects, setProjects] = useState<Project[]>([]);
    const [isLoading, setIsLoading] = useState(true);
 
+   const [clients, setClients] = useState<{ id: string, nome: string }[]>([]);
    const [custos, setCustos] = useState<CustoProjeto[]>([]);
 
    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -139,6 +142,8 @@ const Projects: React.FC = () => {
       numeroNota: '',
       inscricaoMunicipal: ''
    });
+
+   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
    const resumo = useMemo(() => {
       if (!selectedProject) return null;
@@ -220,6 +225,17 @@ const Projects: React.FC = () => {
       }
    }, [location.state]); // Dependência apenas do state para evitar loops desnecessários
 
+   useEffect(() => {
+      if (showCreateModal) {
+         fetchClients();
+      }
+   }, [showCreateModal]);
+
+   const fetchClients = async () => {
+      const { data } = await supabase.from('clients').select('id, nome').order('nome');
+      if (data) setClients(data);
+   };
+
    const handleFetchFiscal = async () => {
       if (!selectedProject) return;
       setIsFetchingFiscal(true);
@@ -241,9 +257,11 @@ const Projects: React.FC = () => {
          };
          setCustos([novoCusto, ...custos]);
          setShowFiscalModal(false);
-         alert("Nota Fiscal de Campo Grande importada com sucesso!");
+         setMessage({ text: "Nota Fiscal de Campo Grande importada com sucesso!", type: 'success' });
+         setTimeout(() => setMessage(null), 3000);
       } else {
-         alert(result.mensagem);
+         setMessage({ text: result.mensagem, type: 'error' });
+         setTimeout(() => setMessage(null), 3000);
       }
       setIsFetchingFiscal(false);
    };
@@ -260,13 +278,19 @@ const Projects: React.FC = () => {
          user_id: user?.id
       };
 
-      const { error } = await supabase.from('projects').insert([payload]);
+      console.log('Criando projeto com payload:', payload);
+      const { data, error } = await supabase.from('projects').insert([payload]).select();
 
       if (error) {
-         alert('Erro ao criar projeto: ' + error.message);
+         console.error('Erro Supabase:', error);
+         setMessage({ text: 'Erro ao criar projeto: ' + error.message, type: 'error' });
       } else {
          await fetchProjects();
-         setShowCreateModal(false);
+         setMessage({ text: 'Nova obra criada e salva com sucesso!', type: 'success' });
+         setTimeout(() => {
+            setShowCreateModal(false);
+            setMessage(null);
+         }, 1500);
          setNewProjectForm({
             name: '',
             totalBudget: 0,
@@ -295,10 +319,14 @@ const Projects: React.FC = () => {
       const { error } = await supabase.from('expenses').insert(novosCustosPayload);
 
       if (error) {
-         alert('Erro ao salvar custos: ' + error.message);
+         setMessage({ text: 'Erro ao salvar custos: ' + error.message, type: 'error' });
       } else {
          await fetchCosts(selectedProject.id);
-         setShowBatchModal(false);
+         setMessage({ text: 'Itens da Nota Fiscal salvos com sucesso!', type: 'success' });
+         setTimeout(() => {
+            setShowBatchModal(false);
+            setMessage(null);
+         }, 1500);
       }
    };
 
@@ -338,21 +366,25 @@ const Projects: React.FC = () => {
          .eq('id', selectedProject.id);
 
       if (error) {
-         alert('Erro ao salvar vistoria: ' + error.message);
+         setMessage({ text: 'Erro ao salvar vistoria: ' + error.message, type: 'error' });
       } else {
          const updatedProject = { ...selectedProject, inspections: updatedInspections };
          setProjects(projects.map(p => p.id === selectedProject.id ? updatedProject : p));
          setSelectedProject(updatedProject);
+         setMessage({ text: 'Vistoria registrada com sucesso!', type: 'success' });
 
-         if (status === 'rejected') {
-            setShowInspectionModal(false);
-            setShowNonConformityModal(true);
-         } else {
-            setShowInspectionModal(false);
-            setSelectedTemplate(null);
-            setCurrentInspectionItems([]);
-            setInspectionPhoto(null);
-         }
+         setTimeout(() => {
+            setMessage(null);
+            if (status === 'rejected') {
+               setShowInspectionModal(false);
+               setShowNonConformityModal(true);
+            } else {
+               setShowInspectionModal(false);
+               setSelectedTemplate(null);
+               setCurrentInspectionItems([]);
+               setInspectionPhoto(null);
+            }
+         }, 1500);
       }
    };
 
@@ -379,19 +411,35 @@ const Projects: React.FC = () => {
          .eq('id', selectedProject.id);
 
       if (error) {
-         alert('Erro ao salvar report: ' + error.message);
+         setMessage({ text: 'Erro ao salvar report: ' + error.message, type: 'error' });
       } else {
          const updatedProject = { ...selectedProject, nonConformities: updatedNCs };
          setProjects(projects.map(p => p.id === selectedProject.id ? updatedProject : p));
          setSelectedProject(updatedProject);
-         setShowNonConformityModal(false);
-         setNonConformityForm({ status: 'open', reworkCost: 0 });
+         setMessage({ text: 'Não-conformidade registrada com sucesso!', type: 'success' });
+
+         setTimeout(() => {
+            setShowNonConformityModal(false);
+            setNonConformityForm({ status: 'open', reworkCost: 0 });
+            setMessage(null);
+         }, 1500);
       }
    };
 
 
    return (
       <div className="space-y-8 pb-12 animate-in fade-in duration-500 relative">
+         {/* Global Message Banner */}
+         {message && (
+            <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-[1000] px-6 py-4 rounded-2xl font-black text-sm shadow-2xl animate-in slide-in-from-top-8 duration-300 flex items-center gap-3 border ${message.type === 'success'
+               ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800'
+               : 'bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-900/40 dark:text-rose-400 dark:border-rose-800'
+               }`}>
+               {message.type === 'success' ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+               {message.text}
+            </div>
+         )}
+
          {!selectedProject ? (
             <>
                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
@@ -854,17 +902,47 @@ const Projects: React.FC = () => {
 
                      <div>
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Cliente</label>
-                        <input
-                           type="text"
-                           placeholder="Nome do Cliente"
-                           className="w-full px-5 py-4 bg-gray-100 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-500 cursor-not-allowed"
-                           value={newProjectForm.clientName}
-                           readOnly
-                           title="Para alterar o cliente, inicie pelo cadastro de Clientes"
-                        />
+                        {newProjectForm.clientId ? (
+                           // Modo: Cliente já vinculado (Redirect)
+                           <div className="relative">
+                              <input
+                                 type="text"
+                                 className="w-full px-5 py-4 bg-gray-100 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-500 cursor-not-allowed"
+                                 value={newProjectForm.clientName}
+                                 readOnly
+                              />
+                              <button
+                                 onClick={() => setNewProjectForm(prev => ({ ...prev, clientId: '', clientName: '' }))}
+                                 className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                              >
+                                 Trocar
+                              </button>
+                           </div>
+                        ) : (
+                           // Modo: Seleção de Cliente
+                           <select
+                              className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500/20 appearance-none"
+                              value={newProjectForm.clientId}
+                              onChange={(e) => {
+                                 const selectedClient = clients.find(c => c.id === e.target.value);
+                                 if (selectedClient) {
+                                    setNewProjectForm(prev => ({
+                                       ...prev,
+                                       clientId: selectedClient.id,
+                                       clientName: selectedClient.nome
+                                    }));
+                                 }
+                              }}
+                           >
+                              <option value="">Selecione um Cliente...</option>
+                              {clients.map(client => (
+                                 <option key={client.id} value={client.id}>{client.nome}</option>
+                              ))}
+                           </select>
+                        )}
                         {!newProjectForm.clientId && (
-                           <p className="text-[10px] text-amber-500 font-bold mt-2 flex items-center gap-1">
-                              <Info size={12} /> Cliente não vinculado. Recomendado iniciar pelo cadastro de Clientes.
+                           <p className="text-[10px] text-gray-400 font-bold mt-2 flex items-center gap-1">
+                              <Info size={12} /> Selecione o cliente para vincular à obra.
                            </p>
                         )}
                      </div>
@@ -875,10 +953,17 @@ const Projects: React.FC = () => {
                            <div className="relative">
                               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
                               <input
-                                 type="number"
-                                 className="w-full pl-10 pr-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-900 dark:text-gray-100"
-                                 value={newProjectForm.totalBudget || ''}
-                                 onChange={(e) => setNewProjectForm({ ...newProjectForm, totalBudget: Number(e.target.value) })}
+                                 type="text"
+                                 className="w-full pl-10 pr-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-900 dark:text-gray-100 placeholder-gray-300"
+                                 placeholder="0,00"
+                                 value={newProjectForm.totalBudget ? newProjectForm.totalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}
+                                 onChange={(e) => {
+                                    const formatted = formatInputCurrency(e.target.value);
+                                    // Set raw value for calculation, but we control display via value prop + toLocaleString
+                                    // Parse back to number: 1.234,56 -> 1234.56
+                                    const rawValue = parseCurrency(formatted);
+                                    setNewProjectForm({ ...newProjectForm, totalBudget: rawValue });
+                                 }}
                               />
                            </div>
                         </div>

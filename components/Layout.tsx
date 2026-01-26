@@ -35,7 +35,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
 
   const menuItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/', label: 'Painel Geral', icon: LayoutDashboard },
     { path: '/registrations', label: 'Cadastros e Leads', icon: UserPlus },
     { path: '/projects', label: 'Obras e Projetos', icon: Hammer },
     { path: '/schedule', label: 'Cronograma Obras', icon: CalendarDays },
@@ -103,8 +103,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   key={item.path}
                   onClick={() => handleNavigate(item.path)}
                   className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden animate-slide-up ${isActive
-                      ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold shadow-lg shadow-teal-500/30 scale-[1.02]'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 font-semibold hover:-translate-y-0.5 hover:shadow-md'
+                    ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold shadow-lg shadow-teal-500/30 scale-[1.02]'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 font-semibold hover:-translate-y-0.5 hover:shadow-md'
                     }`}
                   style={{ animationDelay: `${index * 30}ms` }}
                 >
@@ -116,8 +116,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <Icon
                     size={20}
                     className={`relative z-10 transition-transform duration-300 ${isActive
-                        ? 'text-white'
-                        : 'text-gray-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 group-hover:scale-110'
+                      ? 'text-white'
+                      : 'text-gray-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 group-hover:scale-110'
                       }`}
                   />
                   <span className="text-sm relative z-10">{item.label}</span>

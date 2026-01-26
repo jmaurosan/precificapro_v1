@@ -57,6 +57,7 @@ const ClientsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'id' | 'property' | 'briefing' | 'documents' | 'review'>('id');
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const initialFormState: Partial<Client> = {
     tipo: 'PF',
@@ -215,6 +216,41 @@ const ClientsPage: React.FC = () => {
     }
   };
 
+  const handleConsultarCep = async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length === 8) {
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data = await response.json();
+        if (!data.erro) {
+          setFormData((prev: any) => ({
+            ...prev,
+            imovel: {
+              ...prev.imovel,
+              endereco: {
+                ...prev.imovel.endereco,
+                logradouro: data.logradouro,
+                bairro: data.bairro,
+                cidade: data.localidade,
+                uf: data.uf,
+                cep: cep
+              }
+            }
+          }));
+          setMessage({ text: 'Endereço localizado!', type: 'success' });
+          setTimeout(() => setMessage(null), 3000);
+        } else {
+          setMessage({ text: 'CEP não encontrado.', type: 'error' });
+          setTimeout(() => setMessage(null), 3000);
+        }
+      } catch (error) {
+        setMessage({ text: 'Erro ao buscar CEP.', type: 'error' });
+        setTimeout(() => setMessage(null), 3000);
+        console.error("Erro ao buscar CEP:", error);
+      }
+    }
+  };
+
   const handleSave = async () => {
     if (!formData.nome || !formData.email) {
       alert("Nome e Email são campos obrigatórios na aba de Identificação.");
@@ -242,10 +278,14 @@ const ClientsPage: React.FC = () => {
         .eq('id', editingClient.id);
 
       if (error) {
-        alert('Erro ao atualizar cliente: ' + error.message);
+        setMessage({ text: 'Erro ao atualizar cliente: ' + error.message, type: 'error' });
       } else {
         await fetchClients();
-        setShowModal(false);
+        setMessage({ text: 'Cliente atualizado com sucesso no banco de dados!', type: 'success' });
+        setTimeout(() => {
+          setShowModal(false);
+          setMessage(null);
+        }, 1500);
       }
     } else {
       const { error } = await supabase
@@ -253,10 +293,14 @@ const ClientsPage: React.FC = () => {
         .insert([payload]);
 
       if (error) {
-        alert('Erro ao criar cliente: ' + error.message);
+        setMessage({ text: 'Erro ao criar cliente: ' + error.message, type: 'error' });
       } else {
         await fetchClients();
-        setShowModal(false);
+        setMessage({ text: 'Novo cliente salvo com sucesso no banco de dados!', type: 'success' });
+        setTimeout(() => {
+          setShowModal(false);
+          setMessage(null);
+        }, 1500);
       }
     }
   };
@@ -551,6 +595,16 @@ const ClientsPage: React.FC = () => {
                   );
                 })}
               </div>
+
+              {message && (
+                <div className={`mx-8 mt-4 p-4 rounded-2xl font-bold text-sm animate-in slide-in-from-top-2 duration-300 flex items-center gap-3 ${message.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800'
+                  : 'bg-rose-50 text-rose-700 border border-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800'
+                  }`}>
+                  {message.type === 'success' ? <CheckCircle2 size={18} /> : <X size={18} />}
+                  {message.text}
+                </div>
+              )}
             </div>
 
             <div className="p-8 overflow-y-auto no-scrollbar flex-1">
@@ -697,8 +751,8 @@ const ClientsPage: React.FC = () => {
                       <div className="relative">
                         <input
                           type="number"
-                          value={formData.imovel?.metragemM2}
-                          onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, metragemM2: parseFloat(e.target.value) || 0 } })}
+                          value={formData.imovel?.metragemM2 || ''}
+                          onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, metragemM2: parseFloat(e.target.value) } })}
                           className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-indigo-500 uppercase">m²</span>
@@ -709,14 +763,47 @@ const ClientsPage: React.FC = () => {
                       <input type="text" value={formData.imovel?.condominio?.nome} onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, condominio: { nome: e.target.value } } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                     <div className="md:col-span-3 space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">CEP</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.imovel?.endereco?.cep || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData({ ...formData, imovel: { ...formData.imovel!, endereco: { ...formData.imovel!.endereco, cep: val } } });
+                            if (val.replace(/\D/g, '').length === 8) handleConsultarCep(val);
+                          }}
+                          className="w-full pl-5 pr-10 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
+                          placeholder="00000-000"
+                          maxLength={9}
+                        />
+                        <button onClick={(e) => { e.preventDefault(); handleConsultarCep(formData.imovel?.endereco?.cep || ''); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all"><Search size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="md:col-span-6 space-y-3">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Logradouro / Rua</label>
-                      <input type="text" value={formData.imovel?.endereco?.logradouro} onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, endereco: { ...formData.imovel!.endereco, logradouro: e.target.value } } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
+                      <input type="text" value={formData.imovel?.endereco?.logradouro || ''} onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, endereco: { ...formData.imovel!.endereco, logradouro: e.target.value } } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
+                    </div>
+                    <div className="md:col-span-3 space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nº / Quadra</label>
+                      <input type="text" value={formData.imovel?.endereco?.numero || ''} onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, endereco: { ...formData.imovel!.endereco, numero: e.target.value } } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bairro</label>
+                      <input type="text" value={formData.imovel?.endereco?.bairro || ''} onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, endereco: { ...formData.imovel!.endereco, bairro: e.target.value } } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
                     </div>
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nº / Quadra</label>
-                      <input type="text" value={formData.imovel?.endereco?.numero} onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, endereco: { ...formData.imovel!.endereco, numero: e.target.value } } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cidade</label>
+                      <input type="text" value={formData.imovel?.endereco?.cidade || ''} onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, endereco: { ...formData.imovel!.endereco, cidade: e.target.value } } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">UF</label>
+                      <input type="text" value={formData.imovel?.endereco?.uf || ''} onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, endereco: { ...formData.imovel!.endereco, uf: e.target.value } } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" maxLength={2} />
                     </div>
                   </div>
                 </div>

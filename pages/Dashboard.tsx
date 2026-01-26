@@ -17,17 +17,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
 
-const MOCK_PROJECTS = [
-   { id: 'p1', name: 'Apartamento Granja Viana', client: 'Mauro Silva', budget: 45000, spent: 12450, progress: 28, status: 'active' },
-   { id: 'p2', name: 'Residência Alphaville', client: 'Ana Paula', budget: 120000, spent: 85000, progress: 70, status: 'active' },
-   { id: 'p3', name: 'Loja Shopping Center', client: 'Grupo Moda', budget: 35000, spent: 38000, progress: 100, status: 'warning' },
-];
+
 
 const Dashboard: React.FC = () => {
    const navigate = useNavigate();
    const { user } = useAuth();
    const [projects, setProjects] = useState<any[]>([]);
    const [stats, setStats] = useState<any[]>([]);
+   const [recentProposals, setRecentProposals] = useState<any[]>([]);
    const [loading, setLoading] = useState(true);
 
    useEffect(() => {
@@ -63,6 +60,11 @@ const Dashboard: React.FC = () => {
       const totalExpenses = projectsData?.reduce((acc, p) => acc + Number(p.spent_amount), 0) || 0;
 
       const { count: proposalsCount } = await supabase.from('proposals').select('*', { count: 'exact', head: true }).eq('status', 'draft');
+      const { data: proposalsData } = await supabase.from('proposals').select('*').order('created_at', { ascending: false }).limit(2);
+
+      if (proposalsData) {
+         setRecentProposals(proposalsData);
+      }
 
       setStats([
          { label: 'Receita em Execução', value: `R$ ${totalRevenue.toLocaleString('pt-BR')}`, change: '+12%', icon: TrendingUp, color: 'emerald' },
@@ -162,40 +164,39 @@ const Dashboard: React.FC = () => {
          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="bg-white dark:bg-gray-900 rounded-[40px] p-8 border border-gray-100 dark:border-gray-800 shadow-sm">
                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2"><FileText size={20} className="text-blue-500" /> Propostas Ativas</h3>
+                  <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2"><FileText size={20} className="text-blue-500" /> Propostas Recentes</h3>
                </div>
                <div className="space-y-4">
-                  {[1, 2].map(i => (
-                     <div key={i} className="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-transparent hover:border-blue-100 transition-all cursor-pointer" onClick={() => navigate('/proposals')}>
-                        <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black">#0{i}</div>
-                           <div>
-                              <p className="text-sm font-black text-gray-900 dark:text-white">Proposta Automação</p>
-                              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Vínculo: Projeto Alpha</p>
+                  {recentProposals.length > 0 ? (
+                     recentProposals.map((p: any, i: number) => (
+                        <div key={p.id} className="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-transparent hover:border-blue-100 transition-all cursor-pointer" onClick={() => navigate('/proposals')}>
+                           <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black">#{p.proposal_number?.split('/')[1] || (i + 1)}</div>
+                              <div>
+                                 <p className="text-sm font-black text-gray-900 dark:text-white capitalize">{p.client_name}</p>
+                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Valor: R$ {Number(p.total_amount).toLocaleString('pt-BR')}</p>
+                              </div>
                            </div>
+                           <ChevronRight size={18} className="text-gray-300" />
                         </div>
-                        <ChevronRight size={18} className="text-gray-300" />
-                     </div>
-                  ))}
+                     ))
+                  ) : (
+                     <p className="text-sm text-gray-400 font-medium text-center py-6">Nenhuma proposta recente.</p>
+                  )}
                </div>
             </div>
-            <div className="bg-white dark:bg-gray-900 rounded-[40px] p-8 border border-gray-100 dark:border-gray-800 shadow-sm">
+            <div className="bg-white dark:bg-gray-900 rounded-[40px] p-8 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col">
                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2"><Calculator size={20} className="text-emerald-500" /> Cálculos Rápidos</h3>
+                  <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2"><Calculator size={20} className="text-emerald-500" /> Calculadora PrecificaPro</h3>
                </div>
-               <div className="space-y-4">
-                  {[1, 2].map(i => (
-                     <div key={i} className="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-transparent hover:border-emerald-100 transition-all cursor-pointer" onClick={() => navigate('/calculator')}>
-                        <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-black"><Calculator size={18} /></div>
-                           <div>
-                              <p className="text-sm font-black text-gray-900 dark:text-white">Estimativa Técnica {i}</p>
-                              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Modo: Composição</p>
-                           </div>
-                        </div>
-                        <ChevronRight size={18} className="text-gray-300" />
-                     </div>
-                  ))}
+               <div className="flex-1 flex flex-col items-center justify-center p-6 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-3xl border border-dashed border-emerald-100 dark:border-emerald-800/50">
+                  <Calculator size={48} className="text-emerald-200 dark:text-emerald-800 mb-4" />
+                  <p className="text-sm font-bold text-gray-500 dark:text-gray-400 text-center mb-6 max-w-xs">
+                     Crie estimativas de custos de obra ou honorários de projeto com base na sua configuração financeira.
+                  </p>
+                  <button onClick={() => navigate('/calculator')} className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-600/20 hover:scale-105 transition-all flex items-center gap-2">
+                     <Plus size={16} /> Nova Estimativa
+                  </button>
                </div>
             </div>
          </div>

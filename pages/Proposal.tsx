@@ -1,6 +1,8 @@
-import { ArrowLeft, MessageCircle, Printer } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Printer, Save } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabaseClient';
 import { createWhatsappLink } from '../utils/whatsapp';
 
 interface CompanySettings {
@@ -15,7 +17,9 @@ interface CompanySettings {
 const Proposal: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const {
     items,
@@ -33,6 +37,40 @@ const Proposal: React.FC = () => {
       setCompanySettings(JSON.parse(storedSettings));
     }
   }, []);
+
+  const handleSaveProposal = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+
+    const finalValue = type === 'project' ? suggestedPrice : total;
+
+    // Preparar itens para salvar no formato JSONB ou relacional
+    // Aqui assumimos que a coluna 'items' aceita JSONB
+    const proposalItems = type === 'project'
+      ? phases.map((p: any) => ({ description: p.name, quantity: p.hours, unitPrice: (finalValue / phases.reduce((acc: number, i: any) => acc + i.hours, 0)), category: 'service' }))
+      : items.map((i: any) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitCost, category: i.type }));
+
+    try {
+      const { error } = await supabase.from('proposals').insert({
+        user_id: user?.id,
+        project_id: null, // Poderíamos passar o ID se viesse do state
+        proposal_number: `${new Date().getFullYear()}/${Math.floor(Math.random() * 1000)}`,
+        proposal_date: new Date().toISOString().split('T')[0],
+        client_name: clientName || 'Cliente sem Nome',
+        total_amount: finalValue,
+        status: 'draft',
+        items: proposalItems
+      });
+
+      if (error) throw error;
+      alert('Proposta salva com sucesso!');
+      navigate('/proposals');
+    } catch (err: any) {
+      alert('Erro ao salvar proposta: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (!location.state) {
     return (
@@ -60,6 +98,9 @@ const Proposal: React.FC = () => {
       <div className="fixed top-8 right-8 flex flex-col gap-3 print:hidden z-50">
         <button onClick={() => navigate('/calculator')} className="bg-white/90 backdrop-blur text-gray-700 p-4 rounded-full shadow-lg hover:scale-110 transition-all border border-gray-200" title="Voltar">
           <ArrowLeft size={20} />
+        </button>
+        <button onClick={handleSaveProposal} disabled={isSaving} className="bg-blue-600 text-white p-4 rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 hover:scale-110 transition-all disabled:opacity-50" title="Salvar no Sistema">
+          <Save size={20} />
         </button>
         <button onClick={() => window.open(whatsappLink, '_blank')} className="bg-emerald-500 text-white p-4 rounded-full shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 hover:scale-110 transition-all" title="Enviar via WhatsApp">
           <MessageCircle size={20} />

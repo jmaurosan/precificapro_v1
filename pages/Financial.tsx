@@ -108,7 +108,7 @@ const Financial: React.FC = () => {
     dataVencimento: new Date().toISOString().split('T')[0],
     categoria: 'material',
     prestadorNome: '',
-    projetoNome: 'Apartamento Granja Viana'
+    projetoNome: ''
   });
 
   const uniqueProjects = useMemo(() => {
@@ -182,7 +182,7 @@ const Financial: React.FC = () => {
       dataVencimento: new Date().toISOString().split('T')[0],
       categoria: 'material',
       prestadorNome: '',
-      projetoNome: 'Apartamento Granja Viana'
+      projetoNome: ''
     });
     setNumParcelas(1);
   };

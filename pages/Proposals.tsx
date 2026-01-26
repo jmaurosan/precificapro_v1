@@ -67,7 +67,7 @@ const ProposalsPage: React.FC = () => {
         proposalNumber: p.proposal_number,
         proposalDate: p.proposal_date,
         client: p.client_name,
-        company: 'Individual',
+        company: user?.company || 'Individual',
         projetoNome: p.projects?.name || 'Geral',
         total: Number(p.total_amount),
         status: p.status as any,
@@ -224,7 +224,12 @@ const ProposalsPage: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-6">
               <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
-                {p.status}
+                {{
+                  'approved': 'Aprovado',
+                  'draft': 'Rascunho',
+                  'sent': 'Enviado',
+                  'rejected': 'Rejeitado'
+                }[p.status] || p.status}
               </span>
               <p className="text-[10px] font-bold text-gray-400 tabular-nums">#{p.proposalNumber}</p>
             </div>
