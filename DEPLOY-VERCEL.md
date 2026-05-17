@@ -47,8 +47,8 @@ Install Command: npm install
 
 | Nome | Valor | Ambiente |
 |------|-------|----------|
-| `VITE_SUPABASE_URL` | `https://yktthhpupvegkwsqhwtv.supabase.co` | Production, Preview, Development |
-| `VITE_SUPABASE_ANON_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | Production, Preview, Development |
+| `VITE_SUPABASE_URL` | `https://jgrboitrmckcdzdfzfkf.supabase.co` | Production, Preview, Development |
+| `VITE_SUPABASE_ANON_KEY` | Cole a anon public key do Supabase Dashboard | Production, Preview, Development |
 
 **Onde encontrar os valores:**
 - Abra seu arquivo `.env.local` local

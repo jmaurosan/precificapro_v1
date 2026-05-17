@@ -35,7 +35,7 @@ const ReceiptsPage: React.FC = () => {
   const fetchReceipts = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from('receipts')
+      .from('recibos')
       .select(`
         *,
         projects (name)
@@ -43,23 +43,27 @@ const ReceiptsPage: React.FC = () => {
       .order('data_emissao', { ascending: false });
 
     if (error) {
-      console.error('Error fetching receipts:', error);
+      console.error('Error fetching recibos:', error);
     } else {
       setReceipts((data || []).map(r => ({
         id: r.id,
         numero: r.numero,
-        prestadorNome: r.emissor_nome,
-        prestadorCpfCnpj: r.emissor_documento || '',
-        clienteNome: r.cliente_nome,
-        clienteCpfCnpj: r.cliente_documento || '',
-        descricaoServico: r.descricao || '',
+        prestadorNome: r.prestador_nome,
+        prestadorCpfCnpj: r.prestador_cpf_cnpj || '',
+        clienteNome: r.client_nome,
+        clienteCpfCnpj: r.client_cpf_cnpj || '',
+        descricaoServico: r.descricao_servico || '',
         valor: Number(r.valor),
         moeda: r.moeda || 'BRL',
-        dataEmissao: r.data_emissao,
-        formaRecebimento: r.forma_pagamento || '',
-        projetoNome: r.projects?.name || 'Geral',
-        status: 'valido',
-        assinaturaPrestador: r.metadata?.assinatura
+        dataEmissao: r.data_emissao ? new Date(r.data_emissao) : new Date(),
+        dataServicoInicio: r.data_servico_inicio || '',
+        dataServicoFim: r.data_servico_fim || '',
+        formaRecebimento: r.forma_recebimento || '',
+        projetoNome: (r.projects as any)?.name || 'Geral',
+        status: (r.status || 'rascunho') as 'rascunho' | 'assinado' | 'cancelado',
+        assinaturaPrestador: r.assinatura?.assinatura,
+        criadoEm: r.created_at ? new Date(r.created_at) : new Date(),
+        atualizadoEm: r.updated_at ? new Date(r.updated_at) : new Date()
       })));
     }
     setLoading(false);
@@ -99,25 +103,33 @@ const ReceiptsPage: React.FC = () => {
     const assinaturaSimulada = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
 
     const payload = {
-      user_id: user?.id,
       project_id: formData.projetoId || null,
+      project_name: formData.projetoNome || null,
       numero: tempRecibo.numero,
-      emissor_nome: formData.prestadorNome,
-      emissor_documento: formData.prestadorCpfCnpj,
-      cliente_nome: formData.clienteNome,
-      cliente_documento: formData.clienteCpfCnpj,
+      prestador_nome: formData.prestadorNome,
+      prestador_cpf_cnpj: formData.prestadorCpfCnpj,
+      prestador_email: formData.prestadorEmail || null,
+      prestador_telefone: formData.prestadorTelefone || null,
+      prestador_endereco: formData.prestadorEndereco || null,
+      client_nome: formData.clienteNome,
+      client_cpf_cnpj: formData.clienteCpfCnpj,
+      client_endereco: formData.clienteEndereco || null,
+      client_email: formData.clienteEmail || null,
+      descricao_servico: formData.descricaoServico,
+      data_servico_inicio: formData.dataServicoInicio || null,
+      data_servico_fim: formData.dataServicoFim || null,
       valor: formData.valor,
-      descricao: formData.descricaoServico,
-      forma_pagamento: formData.formaRecebimento,
-      data_emissao: new Date().toISOString().split('T')[0],
-      metadata: {
+      moeda: 'BRL',
+      forma_recebimento: formData.formaRecebimento,
+      status: 'rascunho',
+      assinatura: {
         assinatura: assinaturaSimulada,
         dataServicoInicio: formData.dataServicoInicio,
         dataServicoFim: formData.dataServicoFim
       }
     };
 
-    const { error } = await supabase.from('receipts').insert([payload]);
+    const { error } = await supabase.from('recibos').insert([payload]);
 
     if (error) {
       alert('Erro ao salvar recibo: ' + error.message);
@@ -159,7 +171,7 @@ const ReceiptsPage: React.FC = () => {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-6 py-3.5 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all hover:bg-indigo-700"
+          className="flex items-center gap-2 px-6 py-3.5 bg-teal-600 text-white rounded-2xl font-bold shadow-lg shadow-teal-600/20 active:scale-95 transition-all hover:bg-teal-700"
         >
           <Plus size={20} /> Novo Recibo Avulso
         </button>
@@ -172,7 +184,7 @@ const ReceiptsPage: React.FC = () => {
           placeholder="Buscar por cliente, obra ou número do recibo..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm"
+          className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-teal-500/10 transition-all shadow-sm"
         />
       </div>
 
@@ -186,7 +198,7 @@ const ReceiptsPage: React.FC = () => {
           {filtered.map(r => (
             <div key={r.id} className="bg-white dark:bg-gray-900 p-6 rounded-[32px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all group relative">
               <div className="flex items-center justify-between mb-4">
-                <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-800">
+                <span className="px-3 py-1 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full text-[9px] font-black uppercase tracking-widest border border-teal-100 dark:border-teal-800">
                   {r.projetoNome || 'Geral'}
                 </span>
                 <span className="text-[10px] font-bold text-gray-400 tabular-nums">{formatarData(r.dataEmissao)}</span>
@@ -199,9 +211,9 @@ const ReceiptsPage: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-gray-800">
-                <p className="text-lg font-black text-indigo-600">{formatarMoeda(r.valor, r.moeda)}</p>
+                <p className="text-lg font-black text-teal-600">{formatarMoeda(r.valor, r.moeda)}</p>
                 <div className="flex gap-2">
-                  <button onClick={() => handlePrint(r)} className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg text-gray-400 hover:text-indigo-600 transition-all"><Printer size={18} /></button>
+                  <button onClick={() => handlePrint(r)} className="p-2 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-lg text-gray-400 hover:text-teal-600 transition-all"><Printer size={18} /></button>
                   <button className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg text-gray-400 hover:text-rose-600 transition-all"><Trash2 size={18} /></button>
                 </div>
               </div>
@@ -225,10 +237,10 @@ const ReceiptsPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
               <form id="receipt-form" onSubmit={handleSaveNewReceipt} className="space-y-10">
                 <div className="space-y-6">
-                  <h3 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] border-b border-indigo-50 pb-2 flex items-center gap-2">
+                  <h3 className="text-[10px] font-black text-teal-600 uppercase tracking-[0.2em] border-b border-teal-50 pb-2 flex items-center gap-2">
                     <Hammer size={14} /> 1. Vincular à Obra / Projeto
                   </h3>
-                  <select required value={formData.projetoId} onChange={(e) => setFormData({ ...formData, projetoId: e.target.value })} className="w-full px-5 py-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl font-black text-indigo-600 dark:text-indigo-400 outline-none">
+                  <select required value={formData.projetoId} onChange={(e) => setFormData({ ...formData, projetoId: e.target.value })} className="w-full px-5 py-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800 rounded-2xl font-black text-teal-600 dark:text-teal-400 outline-none">
                     <option value="">Geral / Administrativo</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
@@ -259,7 +271,7 @@ const ReceiptsPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-gray-400">Valor Total (R$)</label>
-                      <input required type="number" step="0.01" value={formData.valor || ''} onChange={(e) => setFormData({ ...formData, valor: parseFloat(e.target.value) || 0 })} className="w-full px-5 py-3.5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-black text-indigo-600 text-xl" />
+                      <input required type="number" step="0.01" value={formData.valor || ''} onChange={(e) => setFormData({ ...formData, valor: parseFloat(e.target.value) || 0 })} className="w-full px-5 py-3.5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-black text-teal-600 text-xl" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-gray-400">Forma</label>
@@ -280,7 +292,7 @@ const ReceiptsPage: React.FC = () => {
 
             <div className="p-8 border-t border-gray-50 dark:border-gray-800 flex gap-4 shrink-0 bg-gray-50/50 dark:bg-gray-900/50 rounded-b-[40px]">
               <button type="button" onClick={() => { setShowCreateModal(false); resetForm(); }} className="flex-1 py-4 bg-white dark:bg-gray-800 text-gray-500 rounded-2xl font-bold hover:bg-gray-100 transition-all uppercase tracking-widest text-[10px] border border-gray-100 dark:border-gray-700">Descartar</button>
-              <button form="receipt-form" type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]">
+              <button form="receipt-form" type="submit" className="flex-1 py-4 bg-teal-600 text-white rounded-2xl font-black shadow-lg shadow-teal-600/20 hover:bg-teal-700 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]">
                 <CheckCircle2 size={18} /> Confirmar e Gerar Recibo
               </button>
             </div>

@@ -14,13 +14,41 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
-import { Consignado, ContaPagar } from '../types';
 
-interface ExtendedContaPagar extends ContaPagar {
+interface ConsignadoDisplay {
+  id: string;
+  projectId: string;
+  fornecedorNome: string;
+  descricao: string;
+  quantidade: number;
+  valorUnitarioEstimado: number;
+  dataEntrada: string;
+  dataPrevisaoDevolucao: string;
+  status: 'pendente' | 'devolvido' | 'comprado';
+  projetoNome: string;
+}
+
+interface FinancialEntry {
+  id: string;
+  descricao: string;
+  valorTotal: number;
+  dataVencimento: string;
+  status: string;
+  categoria: string;
+  projetoId: string;
+  projetoNome: string;
+  prestadorNome: string;
   parcelaAtual?: number;
   totalParcelas?: number;
   grupoId?: string;
+  tipoLancamento?: 'expense' | 'consignado';
 }
+
+const financialColorMap: Record<string, { bg: string; text: string; darkBg: string; darkText: string }> = {
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', darkBg: 'dark:bg-emerald-900/20', darkText: 'dark:text-emerald-400' },
+  amber: { bg: 'bg-amber-50', text: 'text-amber-600', darkBg: 'dark:bg-amber-900/20', darkText: 'dark:text-amber-400' },
+  teal: { bg: 'bg-teal-50', text: 'text-teal-600', darkBg: 'dark:bg-teal-900/20', darkText: 'dark:text-teal-400' },
+};
 
 const Financial: React.FC = () => {
   const navigate = useNavigate();
@@ -28,8 +56,8 @@ const Financial: React.FC = () => {
   const [activeView, setActiveView] = useState<'extrato' | 'consignados'>('extrato');
   const [isLoading, setIsLoading] = useState(true);
 
-  const [consignados, setConsignados] = useState<Consignado[]>([]);
-  const [payables, setPayables] = useState<ExtendedContaPagar[]>([]);
+  const [consignados, setConsignados] = useState<ConsignadoDisplay[]>([]);
+  const [payables, setPayables] = useState<FinancialEntry[]>([]);
   const [projects, setProjects] = useState<{ id: string, name: string }[]>([]);
 
   useEffect(() => {
@@ -41,53 +69,58 @@ const Financial: React.FC = () => {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('expenses')
-      .select(`
-        *,
-        projects (name)
-      `)
-      .order('date', { ascending: true });
 
-    if (error) {
-      console.error('Error fetching financial data:', error);
+    // Fetch contas a pagar
+    const { data: contasData, error: contasError } = await supabase
+      .from('contas_pagar')
+      .select('*')
+      .order('data_vencimento', { ascending: true });
+
+    if (contasError) {
+      console.error('Error fetching contas_pagar:', contasError);
     } else {
-      const expenses = data || [];
-
-      const formattedPayables = expenses
-        .filter(e => e.type === 'expense')
-        .map(e => ({
-          id: e.id,
-          descricao: e.description,
-          valorTotal: Number(e.total_value),
-          dataVencimento: e.date,
-          status: e.status || 'aberta',
-          categoria: e.categoria || 'material',
-          projetoId: e.project_id,
-          projetoNome: e.projects?.name || 'Geral',
-          prestadorNome: e.location || 'Fornecedor',
-          parcelaAtual: e.metadata?.parcelaAtual,
-          totalParcelas: e.metadata?.totalParcelas,
-          grupoId: e.metadata?.grupoId
-        }));
-
-      const formattedConsignados = expenses
-        .filter(e => e.type === 'consignado')
-        .map(e => ({
-          id: e.id,
-          projectId: e.project_id,
-          fornecedorNome: e.location || 'Fornecedor',
-          descricao: e.description,
-          quantidade: Number(e.quantity) || 1,
-          valorUnitarioEstimado: Number(e.unit_value) || 0,
-          dataEntrada: e.date,
-          dataPrevisaoDevolucao: e.metadata?.dataPrevisaoDevolucao || '',
-          status: e.status === 'paga' ? 'devolvido' : 'pendente'
-        }));
-
+      const formattedPayables = (contasData || []).map(e => ({
+        id: e.id,
+        descricao: e.descricao,
+        valorTotal: Number(e.valor_total),
+        dataVencimento: e.data_vencimento,
+        status: e.status || 'aberta',
+        categoria: e.categoria || 'material',
+        projetoId: e.project_id || '',
+        projetoNome: e.project_name || 'Geral',
+        prestadorNome: e.prestador_nome || 'Fornecedor',
+        parcelaAtual: e.parcela_atual,
+        totalParcelas: e.total_parcelas,
+        grupoId: e.grupo_id,
+        tipoLancamento: (e.tipo_lancamento || 'expense') as 'expense' | 'consignado'
+      }));
       setPayables(formattedPayables);
+    }
+
+    // Fetch consignados
+    const { data: consignadosData, error: consignadosError } = await supabase
+      .from('consignados')
+      .select('*, projects(name)')
+      .order('data_entrada', { ascending: true });
+
+    if (consignadosError) {
+      console.error('Error fetching consignados:', consignadosError);
+    } else {
+      const formattedConsignados: ConsignadoDisplay[] = (consignadosData || []).map(c => ({
+        id: c.id,
+        projectId: c.project_id || '',
+        fornecedorNome: c.fornecedor_nome,
+        descricao: c.descricao,
+        quantidade: Number(c.quantidade) || 1,
+        valorUnitarioEstimado: Number(c.valor_unitario_estimado) || 0,
+        dataEntrada: c.data_entrada,
+        dataPrevisaoDevolucao: c.data_previsao_devolucao || '',
+        status: c.status as 'pendente' | 'devolvido' | 'comprado',
+        projetoNome: (c.projects as any)?.name || 'Geral'
+      }));
       setConsignados(formattedConsignados);
     }
+
     setIsLoading(false);
   };
 
@@ -102,13 +135,14 @@ const Financial: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [numParcelas, setNumParcelas] = useState(1);
-  const [formData, setFormData] = useState<Partial<ExtendedContaPagar>>({
+  const [formData, setFormData] = useState<Partial<FinancialEntry> & { tipoLancamento: 'expense' | 'consignado' }>({
     descricao: '',
     valorTotal: 0,
     dataVencimento: new Date().toISOString().split('T')[0],
     categoria: 'material',
     prestadorNome: '',
-    projetoNome: ''
+    projetoNome: '',
+    tipoLancamento: 'expense'
   });
 
   const uniqueProjects = useMemo(() => {
@@ -122,7 +156,7 @@ const Financial: React.FC = () => {
     return [
       { label: 'Fluxo de Caixa (A Pagar)', value: `R$ ${aPagar.toLocaleString('pt-BR')}`, icon: Wallet, color: 'emerald' },
       { label: 'Responsabilidade (Consignados)', value: `R$ ${valorConsignado.toLocaleString('pt-BR')}`, icon: ShieldCheck, color: 'amber' },
-      { label: 'Itens de Terceiros', value: consignados.filter(c => c.status === 'pendente').length.toString(), icon: Box, color: 'indigo' }
+      { label: 'Itens de Terceiros', value: consignados.filter(c => c.status === 'pendente').length.toString(), icon: Box, color: 'teal' }
     ];
   }, [payables, consignados]);
 
@@ -138,9 +172,10 @@ const Financial: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const grupoId = Math.random().toString(36).substr(2, 9);
-    const payloadParcelas = [];
+    const grupoId = crypto.randomUUID();
     const valorParcela = (formData.valorTotal || 0) / numParcelas;
+
+    const payloadParcelas = [];
 
     for (let i = 1; i <= numParcelas; i++) {
       const dataBase = new Date(formData.dataVencimento + 'T00:00:00');
@@ -148,23 +183,21 @@ const Financial: React.FC = () => {
 
       payloadParcelas.push({
         project_id: formData.projetoId || null,
-        description: formData.descricao || '',
-        location: formData.prestadorNome || 'Fornecedor Avulso',
-        total_value: valorParcela,
-        date: dataBase.toISOString().split('T')[0],
+        project_name: formData.projetoNome || null,
+        descricao: formData.descricao || '',
+        prestador_nome: formData.prestadorNome || 'Fornecedor Avulso',
+        valor_total: valorParcela,
+        data_vencimento: dataBase.toISOString().split('T')[0],
         status: 'aberta',
         categoria: (formData.categoria as any) || 'material',
-        type: 'expense',
-        user_id: user?.id,
-        metadata: {
-          parcelaAtual: i,
-          totalParcelas: numParcelas,
-          grupoId: grupoId
-        }
+        parcela_atual: i,
+        total_parcelas: numParcelas,
+        grupo_id: grupoId,
+        tipo_lancamento: formData.tipoLancamento || 'expense'
       });
     }
 
-    const { error } = await supabase.from('expenses').insert(payloadParcelas);
+    const { error } = await supabase.from('contas_pagar').insert(payloadParcelas);
 
     if (error) {
       alert('Erro ao salvar lançamentos: ' + error.message);
@@ -182,7 +215,8 @@ const Financial: React.FC = () => {
       dataVencimento: new Date().toISOString().split('T')[0],
       categoria: 'material',
       prestadorNome: '',
-      projetoNome: ''
+      projetoNome: '',
+      tipoLancamento: 'expense'
     });
     setNumParcelas(1);
   };
@@ -190,7 +224,7 @@ const Financial: React.FC = () => {
   const handleTogglePago = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'paga' ? 'aberta' : 'paga';
     const { error } = await supabase
-      .from('expenses')
+      .from('contas_pagar')
       .update({ status: newStatus })
       .eq('id', id);
 
@@ -209,7 +243,7 @@ const Financial: React.FC = () => {
           <p className="text-gray-500 dark:text-gray-400 text-lg">Consolidação de pagamentos, parcelamentos e responsabilidade consignada.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setActiveView('extrato')} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeView === 'extrato' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-white dark:bg-gray-900 text-gray-400 border border-gray-100 dark:border-gray-800'}`}>Extrato Geral</button>
+          <button onClick={() => setActiveView('extrato')} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeView === 'extrato' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20' : 'bg-white dark:bg-gray-900 text-gray-400 border border-gray-100 dark:border-gray-800'}`}>Extrato Geral</button>
           <button onClick={() => setActiveView('consignados')} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'consignados' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-white dark:bg-gray-900 text-gray-400 border border-gray-100 dark:border-gray-800'}`}>
             <Box size={14} /> Alerta Consignados
           </button>
@@ -219,7 +253,7 @@ const Financial: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {stats.map((stat, i) => (
           <div key={i} className="bg-white dark:bg-gray-900 rounded-[32px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm flex items-center gap-5">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-${stat.color}-50 text-${stat.color}-600 dark:bg-${stat.color}-900/20 dark:text-${stat.color}-400`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${financialColorMap[stat.color]?.bg || 'bg-gray-50'} ${financialColorMap[stat.color]?.text || 'text-gray-600'} ${financialColorMap[stat.color]?.darkBg || 'dark:bg-gray-900/20'} ${financialColorMap[stat.color]?.darkText || 'dark:text-gray-400'}`}>
               <stat.icon size={28} />
             </div>
             <div>
@@ -272,7 +306,7 @@ const Financial: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <span className="px-2 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-indigo-100 dark:border-indigo-800">
+                      <span className="px-2 py-1 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-teal-100 dark:border-teal-800">
                         {item.projetoNome}
                       </span>
                     </td>
@@ -387,7 +421,7 @@ const Financial: React.FC = () => {
                   <select
                     value={formData.projetoId || ''}
                     onChange={(e) => setFormData({ ...formData, projetoId: e.target.value })}
-                    className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm"
+                    className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-teal-500/20 transition-all shadow-sm"
                   >
                     <option value="">Sem vínculo (Geral)</option>
                     {projects.map(p => (
@@ -398,9 +432,9 @@ const Financial: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tipo de Lançamento</label>
                   <select
-                    value={formData.type || 'expense'}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                    className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm"
+                    value={formData.tipoLancamento || 'expense'}
+                    onChange={(e) => setFormData({ ...formData, tipoLancamento: e.target.value as 'expense' | 'consignado' })}
+                    className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-teal-500/20 transition-all shadow-sm"
                   >
                     <option value="expense">Despesa / Pagamento</option>
                     <option value="consignado">Material Consignado</option>

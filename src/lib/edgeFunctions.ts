@@ -44,9 +44,13 @@ export async function callEdgeFunction<T = any>({
   timeout = 30000,
 }: EdgeFunctionOptions): Promise<T> {
   try {
-    // 1. Obter sessão ou usar chave anônima do .env.local
+    // 1. Edge Functions sensíveis exigem usuário autenticado.
     const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const token = session?.access_token;
+
+    if (!token) {
+      throw new EdgeFunctionError('Faça login para usar este recurso.', 401);
+    }
 
     // 2. Preparar URL da Edge Function
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;

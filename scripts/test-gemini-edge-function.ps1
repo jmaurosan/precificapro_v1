@@ -6,9 +6,39 @@ Write-Host "Teste da Edge Function - Gemini API" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Configurações
-$SUPABASE_URL = "https://yktthhpupvegkwsqhwtv.supabase.co"
-$ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrdHRoaHB1cHZlZ2t3c3Fod3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4NTA0MTQsImV4cCI6MjA4NDQyNjQxNH0.p_z_5_QlYSoEn045BjRwgyuZKeDmvyWRSZoJcCgglBE"
+# Configurações: lê .env.local/.env para evitar credenciais hardcoded.
+function Import-EnvFile {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        return
+    }
+
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith("#") -or -not $line.Contains("=")) {
+            return
+        }
+
+        $parts = $line.Split("=", 2)
+        $name = $parts[0].Trim()
+        $value = $parts[1].Trim().Trim('"').Trim("'")
+
+        if ($name -and -not [Environment]::GetEnvironmentVariable($name, "Process")) {
+            [Environment]::SetEnvironmentVariable($name, $value, "Process")
+        }
+    }
+}
+
+Import-EnvFile ".env.local"
+Import-EnvFile ".env"
+
+$SUPABASE_URL = [Environment]::GetEnvironmentVariable("VITE_SUPABASE_URL", "Process")
+$ANON_KEY = [Environment]::GetEnvironmentVariable("VITE_SUPABASE_ANON_KEY", "Process")
+
+if (-not $SUPABASE_URL -or -not $ANON_KEY) {
+    throw "Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local ou .env."
+}
 
 # Função para fazer requisição
 function Test-EdgeFunction {

@@ -92,7 +92,7 @@ const CalculatorPage: React.FC = () => {
   };
 
   const fetchCatalogServices = async () => {
-    const { data } = await supabase.from('catalog_services').select('*').order('name');
+    const { data } = await supabase.from('services').select('*').order('name');
     if (data) {
       setCatalogServices(data.map(s => ({
         id: s.id,
@@ -213,7 +213,7 @@ const CalculatorPage: React.FC = () => {
       <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl w-fit">
         <button
           onClick={() => setActiveTab('project')}
-          className={`px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${activeTab === 'project' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+          className={`px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${activeTab === 'project' ? 'bg-white dark:bg-gray-700 shadow-sm text-teal-600 dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}
         >
           <PencilRuler size={18} /> Honorários de Projeto
         </button>
@@ -230,7 +230,7 @@ const CalculatorPage: React.FC = () => {
           {/* Left: Configuration */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white dark:bg-gray-900 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-gray-800">
-              <h3 className="text-lg font-black text-gray-900 dark:text-white mb-6 flex items-center gap-2"><Clock className="text-indigo-500" /> Estimativa de Horas por Fase</h3>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white mb-6 flex items-center gap-2"><Clock className="text-teal-500" /> Estimativa de Horas por Fase</h3>
               <div className="space-y-4">
                 {projectPhases.map(phase => (
                   <div key={phase.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
@@ -240,7 +240,7 @@ const CalculatorPage: React.FC = () => {
                         type="number"
                         value={phase.hours}
                         onChange={(e) => updatePhase(phase.id, parseFloat(e.target.value) || 0)}
-                        className="w-20 text-center font-black bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl py-2 text-indigo-600"
+                        className="w-20 text-center font-black bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl py-2 text-teal-600"
                       />
                       <span className="text-xs font-black text-gray-400 uppercase">Horas</span>
                     </div>
@@ -248,7 +248,7 @@ const CalculatorPage: React.FC = () => {
                 ))}
                 <div className="pt-4 flex justify-between items-center text-gray-900 dark:text-white px-4">
                   <span className="font-black">Total de Horas Estimadas</span>
-                  <span className="text-2xl font-black text-indigo-600">{totalProjectHours}h</span>
+                  <span className="text-2xl font-black text-teal-600">{totalProjectHours}h</span>
                 </div>
               </div>
             </div>
@@ -256,30 +256,30 @@ const CalculatorPage: React.FC = () => {
 
           {/* Right: Pricing Summary */}
           <div className="space-y-6">
-            <div className="bg-indigo-900 text-white rounded-[32px] p-8 relative overflow-hidden">
+            <div className="bg-teal-900 text-white rounded-[32px] p-8 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
               <div className="relative z-10 space-y-6">
                 <div>
-                  <p className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1">Preço Mínimo Sugerido</p>
+                  <p className="text-xs font-bold text-teal-300 uppercase tracking-widest mb-1">Preço Mínimo Sugerido</p>
                   <h2 className="text-4xl font-black tracking-tighter">R$ {suggestedProjectPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t border-white/10">
-                  <div className="flex justify-between text-xs text-indigo-200">
+                  <div className="flex justify-between text-xs text-teal-200">
                     <span>Custo da Hora Técnica</span>
                     <span className="font-bold">R$ {hourlyRate.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-xs text-indigo-200">
+                  <div className="flex justify-between text-xs text-teal-200">
                     <span>Custo Base (Horas)</span>
                     <span className="font-bold">R$ {projectBaseCost.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-xs text-indigo-200">
+                  <div className="flex justify-between text-xs text-teal-200">
                     <span>Margem ({targetProjectMargin}%) + Impostos</span>
                     <span className="font-bold text-emerald-300">+ R$ {(suggestedProjectPrice - projectBaseCost).toFixed(2)}</span>
                   </div>
                 </div>
 
-                <button className="w-full py-4 bg-white text-indigo-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">
+                <button onClick={handleGenerateProposal} className="w-full py-4 bg-white text-teal-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">
                   Gerar Proposta
                 </button>
               </div>
@@ -396,8 +396,8 @@ const CalculatorPage: React.FC = () => {
             </div>
             <div className="p-8 space-y-6">
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2"><Hammer size={12} /> Selecione a Obra Destino</label>
-                <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)} className="w-full px-5 py-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl font-black text-indigo-600 outline-none">
+                <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest flex items-center gap-2"><Hammer size={12} /> Selecione a Obra Destino</label>
+                <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)} className="w-full px-5 py-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800 rounded-2xl font-black text-teal-600 outline-none">
                   <option value="">Selecione a Obra...</option>
                   {projects.map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
@@ -408,7 +408,7 @@ const CalculatorPage: React.FC = () => {
                 <p className="text-[10px] font-black text-gray-400 uppercase mb-1 text-center">Valor a ser Transmitido</p>
                 <p className="text-2xl font-black text-gray-900 dark:text-white text-center">R$ {constructionTotal.toLocaleString('pt-BR')}</p>
               </div>
-              <button onClick={handleSaveToProject} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
+              <button onClick={handleSaveToProject} className="w-full py-4 bg-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-teal-600/20 hover:bg-teal-700 transition-all flex items-center justify-center gap-2">
                 <CheckCircle2 size={18} /> Confirmar Vínculo
               </button>
             </div>

@@ -39,7 +39,7 @@ const ServicesPage: React.FC = () => {
   const fetchServices = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from('catalog_services')
+      .from('services')
       .select('*')
       .order('name', { ascending: true });
 
@@ -65,7 +65,7 @@ const ServicesPage: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este serviço?')) {
-      const { error } = await supabase.from('catalog_services').delete().eq('id', id);
+      const { error } = await supabase.from('services').delete().eq('id', id);
       if (error) {
         alert('Erro ao excluir: ' + error.message);
       } else {
@@ -89,7 +89,7 @@ const ServicesPage: React.FC = () => {
 
     if (editingService) {
       const { error } = await supabase
-        .from('catalog_services')
+        .from('services')
         .update(payload)
         .eq('id', editingService.id);
 
@@ -97,7 +97,7 @@ const ServicesPage: React.FC = () => {
       else await fetchServices();
     } else {
       const { error } = await supabase
-        .from('catalog_services')
+        .from('services')
         .insert([payload]);
 
       if (error) alert('Erro ao salvar: ' + error.message);

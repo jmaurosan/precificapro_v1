@@ -8,6 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
   logout: () => Promise<void>;
   signInWithProvider: (provider: 'google' | 'apple') => Promise<{ error: any }>;
 }
@@ -119,13 +120,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       email,
       password,
       options: {
-        data: { full_name: name }
+        data: { full_name: name },
+        emailRedirectTo: `${window.location.origin}/`
       }
     });
 
-
-
-    if (error) setIsLoading(false);
+    if (error || !data.session) setIsLoading(false);
     return { error };
   };
 

@@ -15,12 +15,28 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  * ```
  */
 
-// Configuração de CORS para permitir requisições do frontend
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+// Configuração de CORS. Em produção, configure ALLOWED_ORIGINS com URLs separadas por vírgula.
+const baseCorsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') || '';
+  const allowedOrigins = (Deno.env.get('ALLOWED_ORIGINS') || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const allowOrigin = allowedOrigins.length === 0 || allowedOrigins.includes(origin)
+    ? (origin || '*')
+    : 'null';
+
+  return {
+    ...baseCorsHeaders,
+    'Access-Control-Allow-Origin': allowOrigin,
+  };
+}
 
 interface RequestPayload {
   action: string;
@@ -33,18 +49,39 @@ interface ApiResponse {
   error?: string;
 }
 
+interface SupabaseAuthUser {
+  id: string;
+  email?: string;
+}
+
 /**
  * Valida o token de autenticação do usuário
  */
-async function validateAuth(authHeader: string | null): Promise<string> {
+async function validateAuth(authHeader: string | null): Promise<SupabaseAuthUser> {
   if (!authHeader) {
     throw new Error('Token de autenticação não fornecido');
   }
 
-  // Aqui você pode adicionar validação adicional do token se necessário
-  // Por exemplo, verificar se o usuário tem permissão específica
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-  return authHeader.replace('Bearer ', '');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Configuração de autenticação ausente no servidor');
+  }
+
+  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: supabaseAnonKey,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Token de autenticação inválido ou expirado');
+  }
+
+  return await response.json() as SupabaseAuthUser;
 }
 
 /**
@@ -151,7 +188,7 @@ function logRequest(level: 'info' | 'error' | 'warn', message: string, meta?: an
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: getCorsHeaders(req) });
   }
 
   const startTime = Date.now();
@@ -164,7 +201,7 @@ Deno.serve(async (req: Request) => {
 
     // 2. Validar autenticação
     const authHeader = req.headers.get('Authorization');
-    const token = await validateAuth(authHeader);
+    await validateAuth(authHeader);
 
     // 3. Parse do body
     const payload: RequestPayload = await req.json();
@@ -198,7 +235,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify(response),
       {
         headers: {
-          ...corsHeaders,
+          ...getCorsHeaders(req),
           'Content-Type': 'application/json',
         },
         status: 200,
@@ -223,7 +260,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify(response),
       {
         headers: {
-          ...corsHeaders,
+          ...getCorsHeaders(req),
           'Content-Type': 'application/json',
         },
         status: error.message.includes('autenticação') ? 401 : 400,

@@ -76,7 +76,7 @@ const Proposal: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
         <p className="text-gray-500 mb-4">Nenhum dado de proposta encontrado.</p>
-        <button onClick={() => navigate('/calculator')} className="text-indigo-600 font-bold hover:underline">Voltar para Calculadora</button>
+        <button onClick={() => navigate('/calculator')} className="text-teal-600 font-bold hover:underline">Voltar para Calculadora</button>
       </div>
     );
   }
@@ -105,7 +105,7 @@ const Proposal: React.FC = () => {
         <button onClick={() => window.open(whatsappLink, '_blank')} className="bg-emerald-500 text-white p-4 rounded-full shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 hover:scale-110 transition-all" title="Enviar via WhatsApp">
           <MessageCircle size={20} />
         </button>
-        <button onClick={() => window.print()} className="bg-indigo-600 text-white p-4 rounded-full shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:scale-110 transition-all" title="Imprimir / Salvar PDF">
+        <button onClick={() => window.print()} className="bg-teal-600 text-white p-4 rounded-full shadow-lg shadow-teal-600/30 hover:bg-teal-700 hover:scale-110 transition-all" title="Imprimir / Salvar PDF">
           <Printer size={20} />
         </button>
       </div>
@@ -114,12 +114,12 @@ const Proposal: React.FC = () => {
       <div className="bg-white w-[210mm] min-h-[297mm] mx-auto shadow-2xl print:shadow-none print:w-full print:mx-0 p-[15mm] md:p-[20mm] relative text-gray-800">
 
         {/* Cabeçalho */}
-        <header className="flex justify-between items-start border-b-2 border-indigo-900/10 pb-8 mb-12">
+        <header className="flex justify-between items-start border-b-2 border-teal-900/10 pb-8 mb-12">
           <div className="flex flex-col gap-4">
             {companySettings?.logo ? (
               <img src={companySettings.logo} alt="Logo" className="h-16 w-auto object-contain object-left" />
             ) : (
-              <h1 className="text-3xl font-black text-indigo-900 tracking-tighter uppercase">{companySettings?.companyName || 'Seu Escritório'}</h1>
+              <h1 className="text-3xl font-black text-teal-900 tracking-tighter uppercase">{companySettings?.companyName || 'Seu Escritório'}</h1>
             )}
             <div className="text-sm text-gray-500 space-y-0.5 font-medium">
               <p>{companySettings?.address || 'Endereço da Empresa'}</p>
@@ -129,18 +129,18 @@ const Proposal: React.FC = () => {
           </div>
           <div className="text-right">
             <h2 className="text-5xl font-black text-gray-100 uppercase tracking-tighter loading-none">Proposta</h2>
-            <p className="text-indigo-600 font-bold text-lg -mt-4 relative z-10">Comercial</p>
+            <p className="text-teal-600 font-bold text-lg -mt-4 relative z-10">Comercial</p>
             <div className="mt-4 text-sm font-medium text-gray-500">
               <p>Emissão: {currentDate}</p>
               <p>Validade: {validUntil}</p>
-              <p className="mt-2 text-xs bg-indigo-50 text-indigo-700 inline-block px-2 py-1 rounded">Ref: {projectName || 'Projeto'}</p>
+              <p className="mt-2 text-xs bg-teal-50 text-teal-700 inline-block px-2 py-1 rounded">Ref: {projectName || 'Projeto'}</p>
             </div>
           </div>
         </header>
 
         {/* Cliente */}
         <section className="mb-12 bg-gray-50 rounded-2xl p-8 border border-gray-100">
-          <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-4">Dados do Cliente</h3>
+          <h3 className="text-xs font-black text-teal-400 uppercase tracking-widest mb-4">Dados do Cliente</h3>
           <div className="grid grid-cols-2 gap-8">
             <div>
               <p className="text-sm text-gray-400 font-medium mb-1">Cliente</p>
@@ -155,7 +155,7 @@ const Proposal: React.FC = () => {
 
         {/* Corpo da Proposta: Projeto ou Obra */}
         <section className="mb-12">
-          <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-6">Escopo dos Serviços</h3>
+          <h3 className="text-xs font-black text-teal-400 uppercase tracking-widest mb-6">Escopo dos Serviços</h3>
 
           {type === 'project' ? (
             // Tabela de Fases de Projeto
@@ -221,11 +221,11 @@ const Proposal: React.FC = () => {
 
         {/* Total */}
         <section className="flex justify-end mb-16">
-          <div className="w-1/2 bg-indigo-900 text-white p-8 rounded-2xl relative overflow-hidden">
+          <div className="w-1/2 bg-teal-900 text-white p-8 rounded-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl translate-x-1/2 -translate-y-1/2"></div>
-            <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-2">Valor Total do Investimento</p>
+            <p className="text-teal-200 text-xs font-bold uppercase tracking-widest mb-2">Valor Total do Investimento</p>
             <p className="text-4xl font-black tracking-tighter">R$ {(type === 'project' ? suggestedPrice : total)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            <p className="text-indigo-300 text-xs mt-2 border-t border-white/20 pt-2">Condições de pagamento a combinar.</p>
+            <p className="text-teal-300 text-xs mt-2 border-t border-white/20 pt-2">Condições de pagamento a combinar.</p>
           </div>
         </section>
 

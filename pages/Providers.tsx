@@ -1,12 +1,14 @@
 
-import React, { useState } from 'react';
-import { 
-  Plus, Search, HardHat, Star, Mail, Phone, 
+import React, { useEffect, useState } from 'react';
+import {
+  Plus, Search, HardHat, Star, Mail, Phone,
   ChevronRight, CheckCircle2, X, Building2, User as UserIcon,
   Droplets, Brush, Layers, Hammer, Edit2, Trash2,
-  Briefcase, Ruler, Zap, Scissors, Shovel, Info, AlertCircle
+  Briefcase, Ruler, Zap, Scissors, Shovel, Info, AlertCircle, Loader2
 } from 'lucide-react';
 import { Prestador, TipoPessoa } from '../types';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabaseClient';
 
 const INITIAL_RAMOS = [
   'Pedreiro/Alvenaria', 
@@ -22,31 +24,70 @@ const INITIAL_RAMOS = [
 ];
 
 const Providers: React.FC = () => {
-  const [providers, setProviders] = useState<Prestador[]>([
-    {
-      id: '1',
-      nome: 'Carlos Revestimentos',
-      tipoCadastro: 'PF',
-      cpfCnpj: '123.456.789-00',
-      ramoAtividade: 'Azulejista/Revestimentos',
-      categoriaProfissional: 'Autônomo',
-      especialidades: ['Porcelanato Grande Formato', 'Pastilhas'],
-      ferramentalProprio: true,
-      disponibilidadeViagem: true,
-      email: 'carlos.azulejista@email.com',
-      telefoneCelular: '(11) 97777-6666',
-      statusCadastro: 'aprovado',
-      notaMedia: 4.8,
-      experienciaAnos: 15
-    }
-  ]);
-
+  const { user } = useAuth();
+  const [providers, setProviders] = useState<Prestador[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [ramos, setRamos] = useState<string[]>(INITIAL_RAMOS);
   const [showModal, setShowModal] = useState(false);
   const [showDossieModal, setShowDossieModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<Prestador | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCustomRamo, setIsCustomRamo] = useState(false);
+
+  // Mapeamento DB → Frontend
+  const mapDbToPrestador = (db: any): Prestador => ({
+    id: db.id,
+    nome: db.nome,
+    tipoCadastro: db.tipo_cadastro,
+    cpfCnpj: db.cpf_cnpj,
+    ramoAtividade: db.ramo_atividade,
+    categoriaProfissional: db.categoria_profissional,
+    especialidades: db.especialidades || [],
+    ferramentalProprio: db.ferramental_proprio,
+    disponibilidadeViagem: db.disponibilidade_viagem,
+    email: db.email,
+    telefoneCelular: db.telefone_celular,
+    statusCadastro: db.status_cadastro,
+    notaMedia: db.nota_media,
+    experienciaAnos: db.experiencia_anos,
+    observacoesInternas: db.observacoes_internas,
+  });
+
+  const mapPrestadorToDb = (p: Partial<Prestador>) => ({
+    nome: p.nome,
+    tipo_cadastro: p.tipoCadastro,
+    cpf_cnpj: p.cpfCnpj,
+    ramo_atividade: p.ramoAtividade,
+    categoria_profissional: p.categoriaProfissional,
+    especialidades: p.especialidades || [],
+    ferramental_proprio: p.ferramentalProprio ?? true,
+    disponibilidade_viagem: p.disponibilidadeViagem ?? false,
+    email: p.email,
+    telefone_celular: p.telefoneCelular,
+    status_cadastro: p.statusCadastro || 'aprovado',
+    nota_media: p.notaMedia || 5.0,
+    experiencia_anos: p.experienciaAnos || 0,
+    observacoes_internas: p.observacoesInternas,
+  });
+
+  useEffect(() => {
+    if (user) fetchProviders();
+  }, [user]);
+
+  const fetchProviders = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('prestadores')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Erro ao carregar prestadores:', error);
+    } else if (data) {
+      setProviders(data.map(mapDbToPrestador));
+    }
+    setIsLoading(false);
+  };
 
   const initialFormState: Partial<Prestador> = {
     tipoCadastro: 'PF',
@@ -114,7 +155,7 @@ const Providers: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Se for um novo ramo, adiciona à lista global de ramos para futuras seleções
@@ -122,15 +163,19 @@ const Providers: React.FC = () => {
       setRamos(prev => [...prev, formData.ramoAtividade!].sort());
     }
 
-    const newProvider: Prestador = {
-      ...formData,
-      id: Math.random().toString(36).substr(2, 9),
-      especialidades: formData.especialidades || [],
-      notaMedia: 5.0,
-      statusCadastro: 'aprovado'
-    } as Prestador;
-    
-    setProviders([newProvider, ...providers]);
+    const dbData = mapPrestadorToDb(formData);
+    const { data, error } = await supabase
+      .from('prestadores')
+      .insert([dbData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Erro ao criar prestador:', error);
+      alert('Erro ao salvar: ' + error.message);
+    } else if (data) {
+      setProviders([mapDbToPrestador(data), ...providers]);
+    }
     setShowModal(false);
   };
 
@@ -162,7 +207,21 @@ const Providers: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredProviders.map(provider => (
+        {isLoading ? (
+          <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4">
+            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            <p className="text-gray-400 font-bold">Carregando prestadores...</p>
+          </div>
+        ) : filteredProviders.length === 0 ? (
+          <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4">
+            <HardHat className="w-12 h-12 text-gray-200" />
+            <p className="text-gray-400 font-bold">Nenhum prestador cadastrado</p>
+            <button onClick={handleOpenCreate} className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold text-sm hover:bg-emerald-700 transition-all">
+              <Plus size={16} className="inline mr-2" />Adicionar Primeiro
+            </button>
+          </div>
+        ) : (
+        filteredProviders.map(provider => (
           <div key={provider.id} className="group bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl hover:border-emerald-200 transition-all relative">
             <div className="flex items-start justify-between mb-6">
               <div className="flex items-center gap-4">
@@ -200,7 +259,8 @@ const Providers: React.FC = () => {
 
             <button onClick={() => { setSelectedProvider(provider); setShowDossieModal(true); }} className="w-full py-3 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2">Dossiê Profissional <ChevronRight size={14} /></button>
           </div>
-        ))}
+        ))
+        )}
       </div>
 
       {/* Modal Cadastro de Novo Profissional */}
@@ -303,7 +363,7 @@ const Providers: React.FC = () => {
                   </div>
 
                   <div className="space-y-6">
-                    <h3 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2 border-b border-indigo-50 pb-2">2. Qualificações</h3>
+                    <h3 className="text-[10px] font-black text-teal-600 uppercase tracking-widest flex items-center gap-2 border-b border-teal-50 pb-2">2. Qualificações</h3>
                     
                     <div className="space-y-4">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -319,7 +379,7 @@ const Providers: React.FC = () => {
                                 key={esp} 
                                 type="button" 
                                 onClick={() => handleToggleEspecialidade(esp)} 
-                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${isSelected ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-400'}`}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${isSelected ? 'bg-teal-600 text-white border-teal-600 shadow-lg' : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-400'}`}
                               >
                                 {esp}
                               </button>
@@ -348,9 +408,9 @@ const Providers: React.FC = () => {
                        </div>
                     </div>
 
-                    <div className="p-6 bg-indigo-50 dark:bg-indigo-900/10 rounded-3xl border border-indigo-100 dark:border-indigo-800 flex items-start gap-4">
-                       <AlertCircle size={18} className="text-indigo-600 shrink-0" />
-                       <p className="text-[10px] font-bold text-indigo-900 dark:text-indigo-300 uppercase leading-relaxed">Novas profissões inseridas manualmente serão salvas no banco de dados do escritório para seleções futuras.</p>
+                    <div className="p-6 bg-teal-50 dark:bg-teal-900/10 rounded-3xl border border-teal-100 dark:border-teal-800 flex items-start gap-4">
+                       <AlertCircle size={18} className="text-teal-600 shrink-0" />
+                       <p className="text-[10px] font-bold text-teal-900 dark:text-teal-300 uppercase leading-relaxed">Novas profissões inseridas manualmente serão salvas no banco de dados do escritório para seleções futuras.</p>
                     </div>
                   </div>
                 </div>

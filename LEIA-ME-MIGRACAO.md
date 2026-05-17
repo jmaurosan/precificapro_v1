@@ -19,7 +19,7 @@
 ## 🔒 O que foi feito?
 
 ### 1. **Edge Function Deployada**
-   - **URL:** `https://yktthhpupvegkwsqhwtv.supabase.co/functions/v1/gemini-api`
+   - **URL:** `https://jgrboitrmckcdzdfzfkf.supabase.co/functions/v1/gemini-api`
    - **Funcionalidades:** generateContent, chat, embedContent
    - **Segurança:** JWT obrigatório, logs, CORS configurado
 
@@ -107,7 +107,7 @@ Se precisar trocar a chave do Gemini:
 
 ### Ver Logs da Edge Function
 ```powershell
-npx supabase functions logs gemini-api --project-ref yktthhpupvegkwsqhwtv
+npx supabase functions logs gemini-api --project-ref jgrboitrmckcdzdfzfkf
 ```
 
 ---

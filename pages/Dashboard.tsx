@@ -2,45 +2,56 @@
 import {
    Activity,
    AlertTriangle,
-   ArrowUpRight,
+   Briefcase,
    Calculator,
+   CalendarDays,
    ChevronRight,
    FileText,
    Hammer,
    PieChart,
    Plus,
+   Receipt,
    TrendingUp,
-   Users
+   UserPlus,
+   Users,
+   Wallet
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
 
-
+// Módulos do sistema com ícones
+const modules = [
+   { label: 'Cadastros', icon: UserPlus, path: '/registrations', color: 'bg-violet-500', lightBg: 'bg-violet-50 dark:bg-violet-900/20', iconColor: 'text-violet-600 dark:text-violet-400' },
+   { label: 'Obras', icon: Hammer, path: '/projects', color: 'bg-teal-500', lightBg: 'bg-teal-50 dark:bg-teal-900/20', iconColor: 'text-teal-600 dark:text-teal-400' },
+   { label: 'Cronograma', icon: CalendarDays, path: '/schedule', color: 'bg-blue-500', lightBg: 'bg-blue-50 dark:bg-blue-900/20', iconColor: 'text-blue-600 dark:text-blue-400' },
+   { label: 'Calculadora', icon: Calculator, path: '/calculator', color: 'bg-emerald-500', lightBg: 'bg-emerald-50 dark:bg-emerald-900/20', iconColor: 'text-emerald-600 dark:text-emerald-400' },
+   { label: 'Propostas', icon: FileText, path: '/proposals', color: 'bg-sky-500', lightBg: 'bg-sky-50 dark:bg-sky-900/20', iconColor: 'text-sky-600 dark:text-sky-400' },
+   { label: 'Financeiro', icon: Wallet, path: '/financial', color: 'bg-amber-500', lightBg: 'bg-amber-50 dark:bg-amber-900/20', iconColor: 'text-amber-600 dark:text-amber-400' },
+   { label: 'Recibos', icon: Receipt, path: '/receipts', color: 'bg-rose-500', lightBg: 'bg-rose-50 dark:bg-rose-900/20', iconColor: 'text-rose-600 dark:text-rose-400' },
+   { label: 'Catálogo', icon: Briefcase, path: '/services', color: 'bg-indigo-500', lightBg: 'bg-indigo-50 dark:bg-indigo-900/20', iconColor: 'text-indigo-600 dark:text-indigo-400' },
+];
 
 const Dashboard: React.FC = () => {
    const navigate = useNavigate();
    const { user } = useAuth();
    const [projects, setProjects] = useState<any[]>([]);
-   const [stats, setStats] = useState<any[]>([]);
-   const [recentProposals, setRecentProposals] = useState<any[]>([]);
    const [loading, setLoading] = useState(true);
+   const [totalReceita, setTotalReceita] = useState(0);
+   const [totalGastos, setTotalGastos] = useState(0);
+   const [proposalCount, setProposalCount] = useState(0);
+   const [recentProposals, setRecentProposals] = useState<any[]>([]);
 
    useEffect(() => {
-      if (user) {
-         fetchDashboardData();
-      }
+      if (user) fetchDashboardData();
    }, [user]);
 
    const fetchDashboardData = async () => {
       setLoading(true);
       const { data: projectsData } = await supabase
          .from('projects')
-         .select(`
-            *,
-            clients (nome)
-         `)
+         .select('*, clients (nome)')
          .order('created_at', { ascending: false })
          .limit(3);
 
@@ -54,152 +65,236 @@ const Dashboard: React.FC = () => {
             progress: p.total_budget > 0 ? Math.round((Number(p.spent_amount) / Number(p.total_budget)) * 100) : 0,
             status: Number(p.spent_amount) > Number(p.total_budget) ? 'warning' : 'active'
          })));
+         setTotalReceita(projectsData.reduce((a, p) => a + Number(p.total_budget), 0));
+         setTotalGastos(projectsData.reduce((a, p) => a + Number(p.spent_amount), 0));
       }
 
-      const totalRevenue = projectsData?.reduce((acc, p) => acc + Number(p.total_budget), 0) || 0;
-      const totalExpenses = projectsData?.reduce((acc, p) => acc + Number(p.spent_amount), 0) || 0;
-
-      const { count: proposalsCount } = await supabase.from('proposals').select('*', { count: 'exact', head: true }).eq('status', 'draft');
-      const { data: proposalsData } = await supabase.from('proposals').select('*').order('created_at', { ascending: false }).limit(2);
-
-      if (proposalsData) {
-         setRecentProposals(proposalsData);
-      }
-
-      setStats([
-         { label: 'Receita em Execução', value: `R$ ${totalRevenue.toLocaleString('pt-BR')}`, change: '+12%', icon: TrendingUp, color: 'emerald' },
-         { label: 'Propostas em Aberto', value: String(proposalsCount || 0), change: 'Aguardando Aprovação', icon: FileText, color: 'blue' },
-         { label: 'Obras Ativas', value: String(projectsData?.length || 0), change: 'No portfólio', icon: Users, color: 'cyan' },
-         { label: 'Gastos Totais', value: `R$ ${totalExpenses.toLocaleString('pt-BR')}`, change: 'Consolidado', icon: Activity, color: 'orange' },
-      ]);
+      const { count } = await supabase.from('proposals').select('*', { count: 'exact', head: true }).eq('status', 'draft');
+      const { data: proposalsData } = await supabase.from('proposals').select('*').order('created_at', { ascending: false }).limit(3);
+      setProposalCount(count || 0);
+      if (proposalsData) setRecentProposals(proposalsData);
       setLoading(false);
    };
 
+   const firstName = user?.name?.split(' ')[0] || 'Usuário';
+   const initials = user?.name?.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase() || 'U';
+
    return (
-      <div className="space-y-10 pb-12 animate-in fade-in duration-500">
-         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-               <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight">Escritório PrecificaPro</h1>
-               <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">Gestão consolidada de portfólio e performance por projeto.</p>
+      <div className="pb-20 animate-in fade-in duration-500">
+
+         {/* ── Header do usuário ── */}
+         <div className="bg-gradient-to-br from-teal-600 to-emerald-600 rounded-3xl p-6 mb-6 shadow-xl shadow-teal-600/20 relative overflow-hidden">
+            {/* Círculos decorativos */}
+            <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
+            <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-white/5" />
+
+            <div className="relative flex items-center justify-between">
+               <div>
+                  <p className="text-teal-100 text-sm font-medium">Olá,</p>
+                  <h1 className="text-2xl font-black text-white">{firstName}</h1>
+                  <p className="text-teal-200 text-xs font-medium mt-0.5 uppercase tracking-wider">{user?.role || 'Arquiteto / Engenheiro'}</p>
+               </div>
+               <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center border-2 border-white/30 shadow-lg">
+                  <span className="text-white font-black text-xl">{initials}</span>
+               </div>
             </div>
-            <div className="flex gap-3">
-               <button onClick={() => navigate('/projects')} className="px-6 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all shadow-sm">Ver Todas as Obras</button>
-               <button onClick={() => navigate('/calculator')} className="px-6 py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2">
-                  <Plus size={16} /> Nova Obra
+
+            {/* Mini stats */}
+            <div className="relative grid grid-cols-3 gap-3 mt-5">
+               <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
+                  <p className="text-white font-black text-lg leading-none">{projects.length}</p>
+                  <p className="text-teal-100 text-[10px] font-bold mt-1 uppercase tracking-wide">Obras</p>
+               </div>
+               <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
+                  <p className="text-white font-black text-lg leading-none">{proposalCount}</p>
+                  <p className="text-teal-100 text-[10px] font-bold mt-1 uppercase tracking-wide">Propostas</p>
+               </div>
+               <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
+                  <p className="text-white font-black text-base leading-none">
+                     {totalReceita > 0 ? `${Math.round((totalGastos / totalReceita) * 100)}%` : '0%'}
+                  </p>
+                  <p className="text-teal-100 text-[10px] font-bold mt-1 uppercase tracking-wide">Exec.</p>
+               </div>
+            </div>
+         </div>
+
+         {/* ── Módulos (grid de ícones) ── */}
+         <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+               <h2 className="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest">Módulos</h2>
+               <button
+                  onClick={() => navigate('/projects')}
+                  className="text-xs font-bold text-teal-600 dark:text-teal-400 flex items-center gap-1 hover:gap-2 transition-all"
+               >
+                  Ver obras <ChevronRight size={14} />
                </button>
             </div>
-         </div>
 
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {stats.map((stat, i) => (
-               <div key={i} className="bg-white dark:bg-gray-900 rounded-[32px] p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
-                  <div className={`w-12 h-12 rounded-2xl bg-${stat.color}-50 dark:bg-${stat.color}-900/20 flex items-center justify-center text-${stat.color}-600 mb-4`}>
-                     <stat.icon size={24} />
-                  </div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
-                  <h3 className="text-2xl font-black text-gray-900 dark:text-white mt-1">{stat.value}</h3>
-                  <p className="text-[10px] font-bold text-emerald-600 mt-2 flex items-center gap-1">
-                     <ArrowUpRight size={12} /> {stat.change}
-                  </p>
-               </div>
-            ))}
-         </div>
-
-         <div className="space-y-6">
-            <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 px-2">
-               <Hammer size={22} className="text-indigo-600" /> Saúde dos Projetos em Execução
-            </h2>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-               {projects.map(project => (
-                  <div
-                     key={project.id}
-                     onClick={() => navigate(`/projects`)}
-                     className="group bg-white dark:bg-gray-900 rounded-[40px] p-8 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all cursor-pointer relative overflow-hidden"
-                  >
-                     {project.status === 'warning' && (
-                        <div className="absolute top-0 right-0 p-6">
-                           <AlertTriangle className="text-rose-500 animate-pulse" size={24} />
+            <div className="grid grid-cols-4 gap-3">
+               {modules.map((mod, i) => {
+                  const Icon = mod.icon;
+                  return (
+                     <button
+                        key={mod.path}
+                        onClick={() => navigate(mod.path)}
+                        className="flex flex-col items-center gap-2 group active:scale-90 transition-transform duration-150"
+                        style={{ animationDelay: `${i * 40}ms` }}
+                     >
+                        <div className={`w-14 h-14 rounded-2xl ${mod.lightBg} flex items-center justify-center shadow-sm group-hover:shadow-md group-active:shadow-none transition-all duration-200`}>
+                           <Icon size={24} className={mod.iconColor} />
                         </div>
-                     )}
-                     <div className="mb-6">
-                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-1">{project.client}</p>
-                        <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight">{project.name}</h3>
-                     </div>
-
-                     <div className="space-y-4">
-                        <div className="flex justify-between items-end">
-                           <div>
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Executado</p>
-                              <p className="text-lg font-black text-gray-900 dark:text-white">R$ {project.spent.toLocaleString('pt-BR')}</p>
-                           </div>
-                           <div className="text-right">
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Budget</p>
-                              <p className="text-sm font-bold text-gray-500">R$ {project.budget.toLocaleString('pt-BR')}</p>
-                           </div>
-                        </div>
-
-                        <div className="relative h-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                           <div
-                              className={`h-full transition-all duration-1000 rounded-full ${project.spent > project.budget ? 'bg-rose-500' : 'bg-indigo-600'}`}
-                              style={{ width: `${Math.min((project.spent / project.budget) * 100, 100)}%` }}
-                           />
-                        </div>
-
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-gray-800">
-                           <div className="flex items-center gap-2">
-                              <PieChart size={14} className="text-gray-400" />
-                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{project.progress}% Concluído</span>
-                           </div>
-                           <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase">
-                              Acessar Obra <ChevronRight size={16} />
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-               ))}
+                        <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">{mod.label}</span>
+                     </button>
+                  );
+               })}
             </div>
          </div>
 
-         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white dark:bg-gray-900 rounded-[40px] p-8 border border-gray-100 dark:border-gray-800 shadow-sm">
-               <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2"><FileText size={20} className="text-blue-500" /> Propostas Recentes</h3>
+         {/* ── Resumo Financeiro ── */}
+         <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 shadow-sm">
+               <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
+                     <TrendingUp size={16} className="text-emerald-600" />
+                  </div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Receita</p>
                </div>
-               <div className="space-y-4">
-                  {recentProposals.length > 0 ? (
-                     recentProposals.map((p: any, i: number) => (
-                        <div key={p.id} className="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-transparent hover:border-blue-100 transition-all cursor-pointer" onClick={() => navigate('/proposals')}>
-                           <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black">#{p.proposal_number?.split('/')[1] || (i + 1)}</div>
-                              <div>
-                                 <p className="text-sm font-black text-gray-900 dark:text-white capitalize">{p.client_name}</p>
-                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Valor: R$ {Number(p.total_amount).toLocaleString('pt-BR')}</p>
-                              </div>
+               <p className="text-xl font-black text-gray-900 dark:text-white">
+                  {loading ? '...' : `R$ ${totalReceita.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
+               </p>
+               <p className="text-[10px] text-emerald-600 font-bold mt-1">Em execução</p>
+            </div>
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 shadow-sm">
+               <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 bg-orange-50 dark:bg-orange-900/20 rounded-xl flex items-center justify-center">
+                     <Activity size={16} className="text-orange-600" />
+                  </div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Gastos</p>
+               </div>
+               <p className="text-xl font-black text-gray-900 dark:text-white">
+                  {loading ? '...' : `R$ ${totalGastos.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
+               </p>
+               <p className="text-[10px] text-orange-500 font-bold mt-1">Consolidado</p>
+            </div>
+         </div>
+
+         {/* ── Obras Recentes ── */}
+         {projects.length > 0 && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+               <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest flex items-center gap-2">
+                     <Hammer size={16} className="text-teal-600" /> Obras Recentes
+                  </h2>
+                  <button onClick={() => navigate('/projects')} className="text-xs font-bold text-teal-600 dark:text-teal-400 flex items-center gap-1">
+                     Ver todas <ChevronRight size={14} />
+                  </button>
+               </div>
+               <div className="space-y-3">
+                  {projects.map(project => (
+                     <div
+                        key={project.id}
+                        onClick={() => navigate('/projects')}
+                        className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl cursor-pointer active:scale-[0.98] transition-transform"
+                     >
+                        {project.status === 'warning' ? (
+                           <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-xl flex items-center justify-center shrink-0">
+                              <AlertTriangle size={18} className="text-rose-500" />
                            </div>
-                           <ChevronRight size={18} className="text-gray-300" />
+                        ) : (
+                           <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center shrink-0">
+                              <Hammer size={18} className="text-teal-600" />
+                           </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                           <p className="text-sm font-black text-gray-900 dark:text-white truncate">{project.name}</p>
+                           <p className="text-[10px] font-bold text-teal-600 uppercase tracking-wide">{project.client}</p>
+                           {/* Barra de progresso */}
+                           <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                 className={`h-full rounded-full transition-all duration-700 ${project.status === 'warning' ? 'bg-rose-500' : 'bg-teal-500'}`}
+                                 style={{ width: `${Math.min(project.progress, 100)}%` }}
+                              />
+                           </div>
                         </div>
-                     ))
-                  ) : (
-                     <p className="text-sm text-gray-400 font-medium text-center py-6">Nenhuma proposta recente.</p>
-                  )}
+                        <div className="text-right shrink-0">
+                           <p className="text-sm font-black text-gray-900 dark:text-white">{project.progress}%</p>
+                           <p className="text-[10px] text-gray-400 font-medium">exec.</p>
+                        </div>
+                     </div>
+                  ))}
                </div>
             </div>
-            <div className="bg-white dark:bg-gray-900 rounded-[40px] p-8 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col">
-               <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2"><Calculator size={20} className="text-emerald-500" /> Calculadora PrecificaPro</h3>
+         )}
+
+         {/* ── Propostas Recentes ── */}
+         {recentProposals.length > 0 && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+               <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest flex items-center gap-2">
+                     <FileText size={16} className="text-blue-500" /> Propostas Recentes
+                  </h2>
+                  <button onClick={() => navigate('/proposals')} className="text-xs font-bold text-teal-600 dark:text-teal-400 flex items-center gap-1">
+                     Ver todas <ChevronRight size={14} />
+                  </button>
                </div>
-               <div className="flex-1 flex flex-col items-center justify-center p-6 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-3xl border border-dashed border-emerald-100 dark:border-emerald-800/50">
-                  <Calculator size={48} className="text-emerald-200 dark:text-emerald-800 mb-4" />
-                  <p className="text-sm font-bold text-gray-500 dark:text-gray-400 text-center mb-6 max-w-xs">
-                     Crie estimativas de custos de obra ou honorários de projeto com base na sua configuração financeira.
-                  </p>
-                  <button onClick={() => navigate('/calculator')} className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-600/20 hover:scale-105 transition-all flex items-center gap-2">
-                     <Plus size={16} /> Nova Estimativa
+               <div className="space-y-3">
+                  {recentProposals.map((p: any, i: number) => (
+                     <div
+                        key={p.id}
+                        onClick={() => navigate('/proposals')}
+                        className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl cursor-pointer active:scale-[0.98] transition-transform"
+                     >
+                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center font-black text-blue-600 text-sm shrink-0">
+                           #{p.proposal_number?.split('/')[1] || (i + 1)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                           <p className="text-sm font-black text-gray-900 dark:text-white capitalize truncate">{p.client_name}</p>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">R$ {Number(p.total_amount).toLocaleString('pt-BR')}</p>
+                        </div>
+                        <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${
+                           p.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                           p.status === 'sent' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                           'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                        }`}>
+                           {p.status === 'approved' ? 'Aprovado' : p.status === 'sent' ? 'Enviado' : 'Rascunho'}
+                        </span>
+                     </div>
+                  ))}
+               </div>
+            </div>
+         )}
+
+         {/* ── FAB - Ação rápida ── */}
+         <div className="fixed bottom-6 right-6 flex flex-col items-end gap-3 z-40">
+            <button
+               onClick={() => navigate('/calculator')}
+               className="flex items-center gap-3 bg-teal-600 text-white px-5 py-4 rounded-2xl shadow-2xl shadow-teal-600/40 font-black text-sm active:scale-95 transition-all hover:bg-teal-700"
+            >
+               <Plus size={20} />
+               Nova Estimativa
+            </button>
+         </div>
+
+         {/* ── Estado vazio ── */}
+         {!loading && projects.length === 0 && recentProposals.length === 0 && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-10 border border-gray-100 dark:border-gray-800 shadow-sm text-center">
+               <div className="w-20 h-20 bg-teal-50 dark:bg-teal-900/20 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                  <PieChart size={36} className="text-teal-400" />
+               </div>
+               <h3 className="text-lg font-black text-gray-900 dark:text-white mb-2">Bem-vindo ao PrecificaPro!</h3>
+               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-xs mx-auto">
+                  Comece criando seu primeiro cliente ou lançando uma estimativa de obra.
+               </p>
+               <div className="flex gap-3 justify-center flex-wrap">
+                  <button onClick={() => navigate('/registrations')} className="px-5 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl font-black text-xs uppercase tracking-wider text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition-colors">
+                     Adicionar Cliente
+                  </button>
+                  <button onClick={() => navigate('/calculator')} className="px-5 py-3 bg-teal-600 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-teal-600/20 hover:bg-teal-700 transition-colors flex items-center gap-2">
+                     <Plus size={14} /> Nova Estimativa
                   </button>
                </div>
             </div>
-         </div>
+         )}
       </div>
    );
 };

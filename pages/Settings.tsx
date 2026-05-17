@@ -311,10 +311,10 @@ const SettingsPage: React.FC = () => {
         </div>
 
         {/* FINANCIAL INTELLIGENCE SECTION */}
-        <div className="bg-white dark:bg-gray-900 rounded-[32px] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden ring-4 ring-indigo-500/5">
+        <div className="bg-white dark:bg-gray-900 rounded-[32px] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden ring-4 ring-teal-500/5">
           <div className="p-8 border-b border-gray-50 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 flex items-center justify-between">
             <h2 className="font-black text-gray-900 dark:text-white flex items-center gap-3">
-              <TrendingUp size={22} className="text-indigo-600" />
+              <TrendingUp size={22} className="text-teal-600" />
               INTELIGÊNCIA FINANCEIRA & MARGEM (BDI)
             </h2>
           </div>
@@ -410,7 +410,7 @@ const SettingsPage: React.FC = () => {
             </div>
 
             {/* SIMULATION CARD */}
-            <div className="bg-indigo-900 text-white rounded-[32px] p-8 flex flex-col justify-between relative overflow-hidden">
+            <div className="bg-teal-900 text-white rounded-[32px] p-8 flex flex-col justify-between relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
 
               <div className="relative z-10">
@@ -448,10 +448,10 @@ const SettingsPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="mt-4 p-3 bg-indigo-950/50 rounded-xl space-y-2 text-[10px] text-indigo-200">
+                      <div className="mt-4 p-3 bg-teal-950/50 rounded-xl space-y-2 text-[10px] text-teal-200">
                         <div className="flex justify-between"><span>Custos Fixos:</span> <span className="font-bold">{fixedCostPercentage.toFixed(1)}%</span></div>
                         <div className="flex justify-between"><span>Impostos:</span> <span className="font-bold">{pricingConfig.taxRate}%</span></div>
-                        <div className="flex justify-between pt-2 border-t border-indigo-900">
+                        <div className="flex justify-between pt-2 border-t border-teal-900">
                           <span>Sua Hora Técnica (Custo):</span>
                           <span className="font-bold text-white text-xs">R$ {hourlyRate.toFixed(2)}</span>
                         </div>

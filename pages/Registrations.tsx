@@ -1,14 +1,16 @@
 
-import React, { useState } from 'react';
-import { 
-  Users, HardHat, Building2, Search, Plus, Filter, 
+import React, { useEffect, useState } from 'react';
+import {
+  Users, HardHat, Building2, Search, Plus, Filter,
   ExternalLink, Mail, Phone, Home, Star, Cpu, Zap,
   ChevronRight, CreditCard, CheckCircle2, X, MapPin, Hash,
   Tag, Package, Globe, User as UserIcon, ShoppingBag, ArrowRight,
-  MessageCircle, Info, Bookmark, Edit2, Trash2
+  MessageCircle, Info, Bookmark, Edit2, Trash2, Loader2
 } from 'lucide-react';
 import ClientsPage from './Clients';
 import Providers from './Providers';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabaseClient';
 
 type TabType = 'clients' | 'providers' | 'suppliers';
 
@@ -24,17 +26,54 @@ interface Supplier {
 }
 
 const Registrations: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('clients');
-
-  const [suppliers, setSuppliers] = useState<Supplier[]>([
-    { id: 's1', name: 'Distribuidora Luz & Som', contactName: 'Ricardo Oliveira', category: 'Materiais Elétricos', marcas: ['Savant', 'Sonos', 'Lutron', 'Control4'], email: 'vendas@luzsom.com.br', fone: '5511988887777', website: 'www.luzesomdistribuidora.com.br' },
-    { id: 's2', name: 'Mármores Granito S.A', contactName: 'Ana Clara', category: 'Pedras e Revestimentos', marcas: ['Dekton', 'Silestone', 'Sensa'], email: 'comercial@granitosa.com', fone: '551133332222', website: 'www.granitosa.com.br' }
-  ]);
-
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showCatalogModal, setShowCatalogModal] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Mapeamento DB ↔ Frontend
+  const mapDbToSupplier = (db: any): Supplier => ({
+    id: db.id,
+    name: db.name,
+    contactName: db.contact_name || '',
+    category: db.category,
+    marcas: db.marcas || [],
+    email: db.email || '',
+    fone: db.fone || '',
+    website: db.website || '',
+  });
+
+  const mapSupplierToDb = (s: Partial<Supplier>) => ({
+    name: s.name,
+    contact_name: s.contactName,
+    category: s.category,
+    marcas: s.marcas || [],
+    email: s.email,
+    fone: s.fone,
+    website: s.website,
+  });
+
+  useEffect(() => {
+    if (user) fetchSuppliers();
+  }, [user]);
+
+  const fetchSuppliers = async () => {
+    setIsLoadingSuppliers(true);
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Erro ao carregar fornecedores:', error);
+    } else if (data) {
+      setSuppliers(data.map(mapDbToSupplier));
+    }
+    setIsLoadingSuppliers(false);
+  };
 
   const [supplierFormData, setSupplierFormData] = useState<Partial<Supplier>>({
     name: '',
@@ -52,21 +91,39 @@ const Registrations: React.FC = () => {
     setShowSupplierModal(true);
   };
 
-  const handleSaveSupplier = (e: React.FormEvent) => {
+  const handleSaveSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
-    const marcasArray = typeof supplierFormData.marcas === 'string' 
+    const marcasArray = typeof supplierFormData.marcas === 'string'
       ? (supplierFormData.marcas as string).split(',').map(m => m.trim()).filter(m => m !== '')
       : supplierFormData.marcas || [];
 
-    if (isEditing) {
-      setSuppliers(suppliers.map(s => s.id === supplierFormData.id ? { ...supplierFormData, marcas: marcasArray } as Supplier : s));
+    const dbData = { ...mapSupplierToDb(supplierFormData), marcas: marcasArray };
+
+    if (isEditing && supplierFormData.id) {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .update(dbData)
+        .eq('id', supplierFormData.id)
+        .select()
+        .single();
+      if (error) {
+        console.error('Erro ao atualizar fornecedor:', error);
+        alert('Erro ao atualizar: ' + error.message);
+      } else if (data) {
+        setSuppliers(suppliers.map(s => s.id === supplierFormData.id ? mapDbToSupplier(data) : s));
+      }
     } else {
-      const newSupplier: Supplier = {
-        ...supplierFormData,
-        id: `s-${Date.now()}`,
-        marcas: marcasArray
-      } as Supplier;
-      setSuppliers([newSupplier, ...suppliers]);
+      const { data, error } = await supabase
+        .from('suppliers')
+        .insert([dbData])
+        .select()
+        .single();
+      if (error) {
+        console.error('Erro ao criar fornecedor:', error);
+        alert('Erro ao salvar: ' + error.message);
+      } else if (data) {
+        setSuppliers([mapDbToSupplier(data), ...suppliers]);
+      }
     }
     setShowSupplierModal(false);
   };
@@ -101,11 +158,25 @@ const Registrations: React.FC = () => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {suppliers.map(s => (
+        {isLoadingSuppliers ? (
+          <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4">
+            <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+            <p className="text-gray-400 font-bold">Carregando fornecedores...</p>
+          </div>
+        ) : suppliers.length === 0 ? (
+          <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4">
+            <Building2 className="w-12 h-12 text-gray-200" />
+            <p className="text-gray-400 font-bold">Nenhum fornecedor cadastrado</p>
+            <button onClick={handleOpenCreateSupplier} className="px-6 py-3 bg-orange-600 text-white rounded-2xl font-bold text-sm hover:bg-orange-700 transition-all">
+              <Plus size={16} className="inline mr-2" />Adicionar Primeiro
+            </button>
+          </div>
+        ) : (
+        suppliers.map(s => (
           <div 
             key={s.id} 
             className="bg-white dark:bg-gray-900 p-6 rounded-[32px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all group relative cursor-pointer"
-            onClick={() => setSelectedSupplier(s) || setShowCatalogModal(true)}
+            onClick={() => { setSelectedSupplier(s); setShowCatalogModal(true); }}
           >
             <div className="flex items-center gap-4 mb-6">
                <div className="w-14 h-14 bg-orange-50 dark:bg-orange-900/20 rounded-2xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-all">
@@ -146,7 +217,8 @@ const Registrations: React.FC = () => {
               Dossiê & Catálogo <ChevronRight size={14} />
             </div>
           </div>
-        ))}
+        ))
+        )}
       </div>
     </div>
   );

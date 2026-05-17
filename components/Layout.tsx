@@ -87,6 +87,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
+              aria-label="Fechar menu"
               className="lg:hidden p-2 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-all duration-200"
             >
               <X size={20} />
@@ -102,6 +103,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <button
                   key={item.path}
                   onClick={() => handleNavigate(item.path)}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden animate-slide-up ${isActive
                     ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold shadow-lg shadow-teal-500/30 scale-[1.02]'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 font-semibold hover:-translate-y-0.5 hover:shadow-md'
@@ -146,12 +148,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex gap-2">
               <button
                 onClick={toggleTheme}
+                aria-label={`Alternar tema. Tema atual: ${theme}`}
                 className="flex-1 flex items-center justify-center p-3 bg-white dark:bg-gray-800 rounded-xl text-gray-600 dark:text-gray-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 {getThemeIcon()}
               </button>
               <button
                 onClick={logout}
+                aria-label="Sair da conta"
                 className="flex items-center justify-center p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-red-600 dark:text-red-400 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 hover:bg-red-100 dark:hover:bg-red-900/30"
               >
                 <LogOut size={20} />
@@ -167,6 +171,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <header className="lg:hidden h-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center px-4 sticky top-0 z-10 backdrop-blur-lg bg-white/95 dark:bg-gray-900/95">
           <button
             onClick={() => setSidebarOpen(true)}
+            aria-label="Abrir menu"
             className="p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl text-gray-600 dark:text-gray-300 transition-all duration-200 hover:scale-105 active:scale-95"
           >
             <Menu size={24} />

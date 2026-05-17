@@ -197,7 +197,7 @@ const ProposalsPage: React.FC = () => {
         </div>
         <button
           onClick={() => setShowFormModal(true)}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-teal-600/20 transition-all active:scale-95"
         >
           <Plus size={20} />
           <span>Nova Proposta</span>
@@ -211,7 +211,7 @@ const ProposalsPage: React.FC = () => {
           placeholder="Buscar por cliente ou obra..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 text-gray-900 dark:text-white font-bold shadow-sm"
+          className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl focus:outline-none focus:ring-4 focus:ring-teal-500/10 text-gray-900 dark:text-white font-bold shadow-sm"
         />
       </div>
 
@@ -220,7 +220,7 @@ const ProposalsPage: React.FC = () => {
           <div
             key={p.id}
             onClick={() => handleViewProposal(p)}
-            className="group bg-white dark:bg-gray-900 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl hover:border-indigo-400 transition-all relative cursor-pointer overflow-hidden"
+            className="group bg-white dark:bg-gray-900 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl hover:border-teal-400 transition-all relative cursor-pointer overflow-hidden"
           >
             <div className="flex items-center justify-between mb-6">
               <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
@@ -234,10 +234,10 @@ const ProposalsPage: React.FC = () => {
               <p className="text-[10px] font-bold text-gray-400 tabular-nums">#{p.proposalNumber}</p>
             </div>
 
-            <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight mb-2 group-hover:text-indigo-600 transition-colors">{p.client}</h3>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight mb-2 group-hover:text-teal-600 transition-colors">{p.client}</h3>
             <div className="flex items-center gap-2 mb-8">
-              <Hammer size={12} className="text-indigo-600" />
-              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{p.projetoNome}</p>
+              <Hammer size={12} className="text-teal-600" />
+              <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest">{p.projetoNome}</p>
             </div>
 
             <div className="flex items-center justify-between pt-6 border-t border-gray-50 dark:border-gray-800">
@@ -247,7 +247,7 @@ const ProposalsPage: React.FC = () => {
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); handleViewProposal(p); }}
-                className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm"
+                className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-all shadow-sm"
               >
                 <ChevronRight size={20} />
               </button>
@@ -266,8 +266,8 @@ const ProposalsPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
               <form id="proposal-form" onSubmit={handleSaveProposal} className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">1. Vincular à Obra / Projeto</label>
-                  <select required value={formData.projetoId} onChange={(e) => setFormData({ ...formData, projetoId: e.target.value })} className="w-full px-5 py-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl font-black text-indigo-600 dark:text-indigo-400 outline-none">
+                  <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest">1. Vincular à Obra / Projeto</label>
+                  <select required value={formData.projetoId} onChange={(e) => setFormData({ ...formData, projetoId: e.target.value })} className="w-full px-5 py-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800 rounded-2xl font-black text-teal-600 dark:text-teal-400 outline-none">
                     <option value="">Geral / Sem vínculo</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
@@ -293,7 +293,7 @@ const ProposalsPage: React.FC = () => {
             </div>
             <div className="p-8 border-t border-gray-50 dark:border-gray-800 flex gap-4 shrink-0 bg-gray-50/50 dark:bg-gray-900/50 rounded-b-[40px]">
               <button onClick={() => setShowFormModal(false)} className="flex-1 py-4 bg-white dark:bg-gray-800 text-gray-500 rounded-2xl font-bold uppercase tracking-widest text-[10px] border border-gray-100 dark:border-gray-700">Cancelar</button>
-              <button form="proposal-form" type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]">
+              <button form="proposal-form" type="submit" className="flex-1 py-4 bg-teal-600 text-white rounded-2xl font-black shadow-lg shadow-teal-600/20 hover:bg-teal-700 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]">
                 Salvar Proposta
               </button>
             </div>

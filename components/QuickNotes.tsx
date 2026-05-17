@@ -187,14 +187,14 @@ const QuickNotes: React.FC = () => {
         onClick={() => setIsOpen(!isOpen)}
         className={`group flex items-center justify-center w-14 h-14 rounded-2xl shadow-lg border-2 border-white dark:border-gray-800 transition-all active:scale-95 pointer-events-auto ${isOpen
             ? 'bg-amber-400 text-amber-950 rotate-90'
-            : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:-translate-y-1'
+            : 'bg-teal-600 text-white hover:bg-teal-700 hover:-translate-y-1'
           }`}
       >
         {isOpen ? <X size={24} /> : (
           <div className="relative">
             <StickyNote size={24} />
             {notes.filter(n => !n.done).length > 0 && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-indigo-600"></span>
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-teal-600"></span>
             )}
           </div>
         )}

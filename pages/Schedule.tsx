@@ -99,7 +99,7 @@ const Schedule: React.FC = () => {
             <span className="px-4 py-2 text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center">{currentYear}</span>
             <button className="p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-all"><ChevronRight size={20} /></button>
           </div>
-          <button className="flex items-center gap-2 px-6 py-3.5 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
+          <button className="flex items-center gap-2 px-6 py-3.5 bg-teal-600 text-white rounded-2xl font-bold shadow-lg shadow-teal-600/20 active:scale-95 transition-all">
             <Plus size={20} /> <span className="hidden sm:inline">Planejar Obra</span>
           </button>
         </div>
@@ -111,9 +111,9 @@ const Schedule: React.FC = () => {
           {months.map((month, idx) => (
             <div
               key={month}
-              className={`py-4 text-center border-r border-gray-100 dark:border-gray-800 last:border-0 ${idx === currentMonth ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''}`}
+              className={`py-4 text-center border-r border-gray-100 dark:border-gray-800 last:border-0 ${idx === currentMonth ? 'bg-teal-50/50 dark:bg-teal-900/20' : ''}`}
             >
-              <span className={`text-[10px] font-black uppercase tracking-widest ${idx === currentMonth ? 'text-indigo-600' : 'text-gray-400'}`}>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${idx === currentMonth ? 'text-teal-600' : 'text-gray-400'}`}>
                 {month}
               </span>
             </div>
@@ -129,7 +129,7 @@ const Schedule: React.FC = () => {
               className="group border-b border-gray-50 dark:border-gray-800 last:border-0 p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
             >
               <div className="flex items-center gap-3 mb-2 px-4 mt-2">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${project.status === 'delayed' ? 'bg-rose-50 text-rose-500' : 'bg-indigo-50 text-indigo-600'} dark:bg-gray-800`}>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${project.status === 'delayed' ? 'bg-rose-50 text-rose-500' : 'bg-teal-50 text-teal-600'} dark:bg-gray-800`}>
                   <Hammer size={16} />
                 </div>
                 <div>
@@ -141,7 +141,7 @@ const Schedule: React.FC = () => {
               <div className="grid grid-cols-12 h-10 relative">
                 {/* Linha de fundo para grade */}
                 {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className={`h-full border-r border-gray-50 dark:border-gray-800/50 last:border-0 ${i === currentMonth ? 'bg-indigo-50/20 dark:bg-indigo-900/10' : ''}`} />
+                  <div key={i} className={`h-full border-r border-gray-50 dark:border-gray-800/50 last:border-0 ${i === currentMonth ? 'bg-teal-50/20 dark:bg-teal-900/10' : ''}`} />
                 ))}
 
                 {/* Barra da Obra */}
@@ -167,10 +167,10 @@ const Schedule: React.FC = () => {
 
           {/* Current Month Indicator Line */}
           <div
-            className="absolute top-0 bottom-0 w-0.5 bg-indigo-500 z-10 pointer-events-none"
+            className="absolute top-0 bottom-0 w-0.5 bg-teal-500 z-10 pointer-events-none"
             style={{ left: `${((currentMonth + 0.5) / 12) * 100}%` }}
           >
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-indigo-500 text-white text-[8px] font-black rounded-b-md whitespace-nowrap">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-teal-500 text-white text-[8px] font-black rounded-b-md whitespace-nowrap">
               HOJE
             </div>
           </div>
@@ -180,11 +180,11 @@ const Schedule: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <Info size={20} className="text-indigo-600" /> Próximas Entregas
+            <Info size={20} className="text-teal-600" /> Próximas Entregas
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {projects.filter(p => p.progress > 80).map(p => (
-              <div key={p.id} className="p-6 bg-white dark:bg-gray-900 rounded-[32px] border border-gray-100 dark:border-gray-800 shadow-sm flex items-center justify-between group hover:border-indigo-500 transition-all">
+              <div key={p.id} className="p-6 bg-white dark:bg-gray-900 rounded-[32px] border border-gray-100 dark:border-gray-800 shadow-sm flex items-center justify-between group hover:border-teal-500 transition-all">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
                     <CheckCircle2 size={20} />
@@ -194,7 +194,7 @@ const Schedule: React.FC = () => {
                     <p className="text-sm font-black text-gray-900 dark:text-white">{p.name}</p>
                   </div>
                 </div>
-                <ChevronRight size={20} className="text-gray-300 group-hover:text-indigo-600 transition-all" />
+                <ChevronRight size={20} className="text-gray-300 group-hover:text-teal-600 transition-all" />
               </div>
             ))}
           </div>

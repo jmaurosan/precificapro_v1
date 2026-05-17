@@ -3,49 +3,78 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description"
-    content="PrecificaPro - Sistema profissional de gestão e precificação de obras para arquitetos e engenheiros. Controle orçamentos, vistorias e financeiro em um só lugar." />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+  <!-- SEO -->
+  <meta name="description" content="PrecificaPro - Sistema profissional de gestão e precificação de obras para arquitetos e engenheiros. Controle orçamentos, vistorias e financeiro em um só lugar." />
   <meta property="og:title" content="PrecificaPro - Sistema de Precificação de Obras" />
   <meta property="og:description" content="Gestão completa para seu escritório de arquitetura e engenharia." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="/og-image.png" />
+  <meta property="og:image" content="/icon-512.png" />
+
+  <!-- PWA - Theme e Status Bar -->
+  <meta name="theme-color" content="#0d9488" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PrecificaPro" />
+  <meta name="application-name" content="PrecificaPro" />
+  <meta name="msapplication-TileColor" content="#0d9488" />
+  <meta name="msapplication-TileImage" content="/icon-144.png" />
+  <meta name="format-detection" content="telephone=no" />
+
+  <!-- Manifest PWA -->
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- Ícones -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/icon-152.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+
   <title>PrecificaPro - Sistema de Precificação</title>
-  <link rel="icon" type="image/png" href="/favicon.png" />
-  <link rel="apple-touch-icon" href="/favicon.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Fontes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+
   <style>
+    * { -webkit-tap-highlight-color: transparent; }
     body {
       font-family: 'Inter', sans-serif;
+      /* Safe area para dispositivos com notch (iPhone X+) */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
     }
+    /* Prevent pull-to-refresh no mobile */
+    html { overscroll-behavior-y: contain; }
 
     /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-    ::-webkit-scrollbar-track {
-      background: transparent;
+    /* Splash screen inicial */
+    #app-loader {
+      position: fixed; inset: 0;
+      background: #0f172a;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.4s ease;
     }
-
-    ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 4px;
-    }
-
-    .dark ::-webkit-scrollbar-thumb {
-      background: #475569;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
-
-    .dark ::-webkit-scrollbar-thumb:hover {
-      background: #64748b;
-    }
+    #app-loader.hidden { opacity: 0; pointer-events: none; }
+    #app-loader svg { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.7;transform:scale(0.95)} }
   </style>
+
   <script type="importmap">
 {
   "imports": {
@@ -61,7 +90,36 @@
 </head>
 
 <body>
+  <!-- Splash screen PWA -->
+  <div id="app-loader">
+    <svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0d9488"/>
+          <stop offset="100%" stop-color="#0f766e"/>
+        </linearGradient>
+      </defs>
+      <rect width="80" height="80" rx="18" fill="url(#lg)"/>
+      <text x="40" y="55" font-family="Arial Black,Arial" font-weight="900" font-size="42" fill="white" text-anchor="middle">P</text>
+    </svg>
+    <p style="color:#94a3b8;font-family:Inter,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;margin-top:20px">PrecificaPro</p>
+  </div>
+
   <div id="root"></div>
+
+  <script>
+    // Remove splash screen quando o app carregar
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const loader = document.getElementById('app-loader');
+        if (loader) {
+          loader.classList.add('hidden');
+          setTimeout(() => loader.remove(), 500);
+        }
+      }, 800);
+    });
+  </script>
+
   <script type="module" src="/index.tsx"></script>
 </body>
 

@@ -441,7 +441,7 @@ const ClientsPage: React.FC = () => {
 
   const getStatusStyle = (status: StatusLead) => {
     switch (status) {
-      case 'contratado': return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400';
+      case 'contratado': return 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400';
       case 'em_briefing': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
       case 'novo': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
       case 'perdido': return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
@@ -458,7 +458,7 @@ const ClientsPage: React.FC = () => {
         </div>
         <button
           onClick={handleOpenCreate}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-teal-600/20 transition-all active:scale-95"
         >
           <Plus size={20} />
           <span>Novo Cliente / Lead</span>
@@ -472,7 +472,7 @@ const ClientsPage: React.FC = () => {
           placeholder="Buscar por nome, CPF/CNPJ ou e-mail..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-gray-900 dark:text-white transition-all shadow-sm font-bold"
+          className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 text-gray-900 dark:text-white transition-all shadow-sm font-bold"
         />
       </div>
 
@@ -481,11 +481,11 @@ const ClientsPage: React.FC = () => {
           <div
             key={client.id}
             onClick={() => handleOpenEdit(client)}
-            className="group bg-white dark:bg-gray-900 rounded-[32px] p-6 shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-indigo-100 dark:hover:border-indigo-900/50 transition-all flex flex-col cursor-pointer relative"
+            className="group bg-white dark:bg-gray-900 rounded-[32px] p-6 shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-teal-100 dark:hover:border-teal-900/50 transition-all flex flex-col cursor-pointer relative"
           >
             <div className="flex items-start justify-between mb-6">
               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 transition-all ${client.status === 'contratado' ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'bg-gray-50 dark:bg-gray-800'}`}>
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border border-teal-100 dark:border-teal-800 text-teal-600 dark:text-teal-400 transition-all ${client.status === 'contratado' ? 'bg-teal-50 dark:bg-teal-900/20' : 'bg-gray-50 dark:bg-gray-800'}`}>
                   {client.tipo === 'PF' ? <Users size={24} /> : <Building size={24} />}
                 </div>
                 <div className="flex-1 min-w-0 pr-8">
@@ -508,13 +508,13 @@ const ClientsPage: React.FC = () => {
 
             <div className="space-y-4 mb-8 flex-1">
               <div className="flex items-center gap-3 text-xs font-bold text-gray-400">
-                <CreditCard size={14} className="text-indigo-500" /> {client.cpfCnpj}
+                <CreditCard size={14} className="text-teal-500" /> {client.cpfCnpj}
               </div>
               <div className="flex items-center gap-3 text-xs font-bold text-gray-400">
-                <Mail size={14} className="text-indigo-500" /> {client.email}
+                <Mail size={14} className="text-teal-500" /> {client.email}
               </div>
               <div className="flex items-center gap-3 text-xs font-bold text-gray-400">
-                <Phone size={14} className="text-indigo-500" /> {client.telefones.celular}
+                <Phone size={14} className="text-teal-500" /> {client.telefones.celular}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -529,7 +529,7 @@ const ClientsPage: React.FC = () => {
               <div className="mt-6 pt-6 border-t border-gray-50 dark:border-gray-800">
                 <button
                   onClick={(e) => { e.stopPropagation(); navigate('/projects', { state: { createForClient: client } }); }}
-                  className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2 group/btn"
+                  className="w-full py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-teal-200 dark:shadow-none flex items-center justify-center gap-2 group/btn"
                 >
                   <Hammer size={14} className="group-hover/btn:rotate-12 transition-transform" /> Iniciar Obra
                 </button>
@@ -537,9 +537,9 @@ const ClientsPage: React.FC = () => {
               <div className="p-5 bg-gray-50 dark:bg-gray-800/40 rounded-[24px] space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                    <Home size={12} className="text-indigo-500" /> {client.imovel.tipo}
+                    <Home size={12} className="text-teal-500" /> {client.imovel.tipo}
                   </span>
-                  <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md uppercase">
+                  <span className="text-[10px] font-black text-teal-600 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-md uppercase">
                     {client.imovel.metragemM2}m²
                   </span>
                 </div>
@@ -586,7 +586,7 @@ const ClientsPage: React.FC = () => {
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
                       className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isActive
-                        ? 'bg-white dark:bg-gray-700 text-indigo-600 shadow-sm'
+                        ? 'bg-white dark:bg-gray-700 text-teal-600 shadow-sm'
                         : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
                         }`}
                     >
@@ -616,13 +616,13 @@ const ClientsPage: React.FC = () => {
                       <div className="flex gap-2">
                         <button
                           onClick={() => setFormData({ ...formData, tipo: 'PF' })}
-                          className={`flex-1 py-4 rounded-2xl font-black text-xs transition-all border flex items-center justify-center gap-2 ${formData.tipo === 'PF' ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-white dark:bg-gray-900 text-gray-400 border-gray-100 dark:border-gray-800'}`}
+                          className={`flex-1 py-4 rounded-2xl font-black text-xs transition-all border flex items-center justify-center gap-2 ${formData.tipo === 'PF' ? 'bg-teal-600 text-white border-teal-600 shadow-lg' : 'bg-white dark:bg-gray-900 text-gray-400 border-gray-100 dark:border-gray-800'}`}
                         >
                           <UserIcon size={16} /> Pessoa Física
                         </button>
                         <button
                           onClick={() => setFormData({ ...formData, tipo: 'PJ' })}
-                          className={`flex-1 py-4 rounded-2xl font-black text-xs transition-all border flex items-center justify-center gap-2 ${formData.tipo === 'PJ' ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-white dark:bg-gray-900 text-gray-400 border-gray-100 dark:border-gray-800'}`}
+                          className={`flex-1 py-4 rounded-2xl font-black text-xs transition-all border flex items-center justify-center gap-2 ${formData.tipo === 'PJ' ? 'bg-teal-600 text-white border-teal-600 shadow-lg' : 'bg-white dark:bg-gray-900 text-gray-400 border-gray-100 dark:border-gray-800'}`}
                         >
                           <Building size={16} /> Pessoa Jurídica
                         </button>
@@ -636,7 +636,7 @@ const ClientsPage: React.FC = () => {
                         type="text"
                         value={formData.nome}
                         onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl focus:border-indigo-500 font-bold outline-none text-gray-900 dark:text-white"
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl focus:border-teal-500 font-bold outline-none text-gray-900 dark:text-white"
                         placeholder={formData.tipo === 'PF' ? 'Ex: João Silva' : 'Ex: Tecnologia LTDA'}
                       />
                     </div>
@@ -755,7 +755,7 @@ const ClientsPage: React.FC = () => {
                           onChange={(e) => setFormData({ ...formData, imovel: { ...formData.imovel!, metragemM2: parseFloat(e.target.value) } })}
                           className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
                         />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-indigo-500 uppercase">m²</span>
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-teal-500 uppercase">m²</span>
                       </div>
                     </div>
                     <div className="space-y-3">
@@ -779,7 +779,7 @@ const ClientsPage: React.FC = () => {
                           placeholder="00000-000"
                           maxLength={9}
                         />
-                        <button onClick={(e) => { e.preventDefault(); handleConsultarCep(formData.imovel?.endereco?.cep || ''); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all"><Search size={14} /></button>
+                        <button onClick={(e) => { e.preventDefault(); handleConsultarCep(formData.imovel?.endereco?.cep || ''); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-600 rounded-lg hover:bg-teal-600 hover:text-white transition-all"><Search size={14} /></button>
                       </div>
                     </div>
                     <div className="md:col-span-6 space-y-3">
@@ -811,33 +811,33 @@ const ClientsPage: React.FC = () => {
 
               {activeTab === 'briefing' && (
                 <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="p-8 bg-indigo-50 dark:bg-indigo-900/10 rounded-[32px] border border-indigo-100 dark:border-indigo-800 flex items-start gap-5">
-                    <div className="w-12 h-12 bg-white dark:bg-gray-900 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-50">
+                  <div className="p-8 bg-teal-50 dark:bg-teal-900/10 rounded-[32px] border border-teal-100 dark:border-teal-800 flex items-start gap-5">
+                    <div className="w-12 h-12 bg-white dark:bg-gray-900 rounded-2xl flex items-center justify-center text-teal-600 shadow-sm border border-teal-50">
                       <Sparkles size={24} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-widest">Objetivo da Obra</h4>
-                      <p className="text-xs font-medium text-indigo-700 dark:text-indigo-400 mt-1 leading-relaxed">Defina os desejos do cliente para alimentar a calculadora de orçamento de forma inteligente.</p>
+                      <h4 className="text-sm font-black text-teal-900 dark:text-teal-300 uppercase tracking-widest">Objetivo da Obra</h4>
+                      <p className="text-xs font-medium text-teal-700 dark:text-teal-400 mt-1 leading-relaxed">Defina os desejos do cliente para alimentar a calculadora de orçamento de forma inteligente.</p>
                     </div>
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><AlignLeft size={12} className="text-indigo-500" /> Descrição da Necessidade</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><AlignLeft size={12} className="text-teal-500" /> Descrição da Necessidade</label>
                     <textarea
                       value={formData.briefing?.objetivo}
                       onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, objetivo: e.target.value } })}
                       placeholder="Ex: Reforma de interiores focada em integração de ambientes e automação de iluminação..."
-                      className="w-full px-6 py-5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[32px] font-bold outline-none text-gray-900 dark:text-white resize-none h-40 focus:border-indigo-500"
+                      className="w-full px-6 py-5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[32px] font-bold outline-none text-gray-900 dark:text-white resize-none h-40 focus:border-teal-500"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12} className="text-indigo-500" /> Estilo / Referências</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12} className="text-teal-500" /> Estilo / Referências</label>
                       <input type="text" value={formData.briefing?.estilo} onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, estilo: e.target.value } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
                     </div>
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Clock size={12} className="text-indigo-500" /> Expectativa de Prazo</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Clock size={12} className="text-teal-500" /> Expectativa de Prazo</label>
                       <select
                         value={formData.briefing?.prazo}
                         onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, prazo: e.target.value } })}
@@ -854,13 +854,13 @@ const ClientsPage: React.FC = () => {
 
               {activeTab === 'documents' && (
                 <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="p-8 bg-indigo-50 dark:bg-indigo-900/10 rounded-[32px] border border-indigo-100 dark:border-indigo-800 flex items-start gap-5">
-                    <div className="w-12 h-12 bg-white dark:bg-gray-900 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-50">
+                  <div className="p-8 bg-teal-50 dark:bg-teal-900/10 rounded-[32px] border border-teal-100 dark:border-teal-800 flex items-start gap-5">
+                    <div className="w-12 h-12 bg-white dark:bg-gray-900 rounded-2xl flex items-center justify-center text-teal-600 shadow-sm border border-teal-50">
                       <FolderOpen size={24} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-widest">Repositório de Documentos</h4>
-                      <p className="text-xs font-medium text-indigo-700 dark:text-indigo-400 mt-1 leading-relaxed">Centralize arquivos importantes do cliente. Limite de 5MB por arquivo.</p>
+                      <h4 className="text-sm font-black text-teal-900 dark:text-teal-300 uppercase tracking-widest">Repositório de Documentos</h4>
+                      <p className="text-xs font-medium text-teal-700 dark:text-teal-400 mt-1 leading-relaxed">Centralize arquivos importantes do cliente. Limite de 5MB por arquivo.</p>
                     </div>
                   </div>
 
@@ -869,7 +869,7 @@ const ClientsPage: React.FC = () => {
                       <div key={categoria} className="bg-white dark:bg-gray-900 rounded-[24px] border border-gray-100 dark:border-gray-800 overflow-hidden">
                         <div className="p-6 border-b border-gray-50 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-indigo-500 shadow-sm border border-gray-100 dark:border-gray-700">
+                            <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-teal-500 shadow-sm border border-gray-100 dark:border-gray-700">
                               {(() => {
                                 const Icon = getCategoriaIcon(categoria);
                                 return <Icon size={18} />;
@@ -883,9 +883,9 @@ const ClientsPage: React.FC = () => {
                             </div>
                           </div>
 
-                          <label className="cursor-pointer group flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-xl transition-all">
-                            <Upload size={14} className="text-gray-400 group-hover:text-indigo-500" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 group-hover:text-indigo-600">Adicionar Arquivo</span>
+                          <label className="cursor-pointer group flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-700 hover:border-teal-500 dark:hover:border-teal-500 rounded-xl transition-all">
+                            <Upload size={14} className="text-gray-400 group-hover:text-teal-500" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 group-hover:text-teal-600">Adicionar Arquivo</span>
                             <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, categoria)} />
                           </label>
                         </div>
@@ -903,7 +903,7 @@ const ClientsPage: React.FC = () => {
                                 .map(doc => (
                                   <div key={doc.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-all shadow-sm hover:shadow-md group">
                                     <div className="flex items-start justify-between gap-3 mb-3">
-                                      <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-700 flex items-center justify-center text-indigo-500 shadow-sm">
+                                      <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-700 flex items-center justify-center text-teal-500 shadow-sm">
                                         {(() => {
                                           const Icon = getDocumentIcon(doc.tipoArquivo);
                                           return <Icon size={20} />;
@@ -937,7 +937,7 @@ const ClientsPage: React.FC = () => {
 
                                       <button
                                         onClick={() => handleDownloadDocumento(doc)}
-                                        className="w-full py-2 flex items-center justify-center gap-2 bg-white dark:bg-gray-700 rounded-lg text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-300 border border-gray-100 dark:border-gray-600 hover:bg-indigo-50 dark:hover:bg-gray-600 transition-all opacity-0 group-hover:opacity-100"
+                                        className="w-full py-2 flex items-center justify-center gap-2 bg-white dark:bg-gray-700 rounded-lg text-[10px] font-black uppercase tracking-widest text-teal-600 dark:text-teal-300 border border-gray-100 dark:border-gray-600 hover:bg-teal-50 dark:hover:bg-gray-600 transition-all opacity-0 group-hover:opacity-100"
                                       >
                                         <Download size={12} /> Baixar
                                       </button>
@@ -957,7 +957,7 @@ const ClientsPage: React.FC = () => {
                 <div className="space-y-8 animate-in fade-in duration-300">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="p-8 bg-gray-50 dark:bg-gray-900 rounded-[32px] border border-gray-100 dark:border-gray-800">
-                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-4 flex items-center gap-2"><UserCheck size={14} /> Dados do Cliente</p>
+                      <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest mb-4 flex items-center gap-2"><UserCheck size={14} /> Dados do Cliente</p>
                       <h4 className="text-xl font-black text-gray-900 dark:text-white">{formData.nome || 'Nome não informado'}</h4>
                       {formData.tipo === 'PJ' && formData.fantasia && (
                         <p className="text-xs font-bold text-gray-400 uppercase mt-1">Nome Fantasia: {formData.fantasia}</p>
@@ -978,13 +978,13 @@ const ClientsPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="p-8 bg-gray-50 dark:bg-gray-900 rounded-[32px] border border-gray-100 dark:border-gray-800">
-                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-4 flex items-center gap-2"><Home size={14} /> Dados do Imóvel</p>
+                      <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest mb-4 flex items-center gap-2"><Home size={14} /> Dados do Imóvel</p>
                       <h4 className="text-lg font-black text-gray-900 dark:text-white capitalize">{formData.imovel?.tipo}</h4>
                       <p className="text-sm text-gray-500 font-bold">{formData.imovel?.metragemM2} m²</p>
                       <p className="text-xs text-gray-400 mt-2 line-clamp-2">{formData.imovel?.endereco?.logradouro}, {formData.imovel?.endereco?.numero}</p>
                     </div>
                   </div>
-                  <div className="p-8 bg-indigo-600 rounded-[32px] text-white shadow-xl shadow-indigo-600/20">
+                  <div className="p-8 bg-teal-600 rounded-[32px] text-white shadow-xl shadow-teal-600/20">
                     <h4 className="text-[10px] font-black uppercase tracking-widest mb-3 opacity-80 flex items-center gap-2"><FileText size={14} /> Resumo do Briefing</h4>
                     <p className="text-sm font-medium leading-relaxed italic">"{formData.briefing?.objetivo || 'Sem descritivo técnico.'}"</p>
                   </div>
@@ -1001,7 +1001,7 @@ const ClientsPage: React.FC = () => {
               </button>
               <button
                 onClick={handleSave}
-                className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px] active:scale-95"
+                className="px-12 py-4 bg-teal-600 text-white rounded-2xl font-black shadow-lg shadow-teal-600/20 hover:bg-teal-700 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px] active:scale-95"
               >
                 <CheckCircle2 size={18} /> {editingClient ? 'Atualizar Dossiê' : 'Finalizar Cadastro'}
               </button>
@@ -1018,7 +1018,7 @@ const ClientsPage: React.FC = () => {
             {/* Header Dossiê */}
             <div className="p-10 border-b border-gray-50 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex flex-col md:flex-row items-center justify-between gap-8">
               <div className="flex items-center gap-6">
-                <div className="w-20 h-20 bg-indigo-600 rounded-[28px] flex items-center justify-center text-white shadow-xl shadow-indigo-600/20">
+                <div className="w-20 h-20 bg-teal-600 rounded-[28px] flex items-center justify-center text-white shadow-xl shadow-teal-600/20">
                   <UserCheck size={36} />
                 </div>
                 <div className="text-center md:text-left">
@@ -1036,7 +1036,7 @@ const ClientsPage: React.FC = () => {
               <div className="flex gap-3">
                 <button
                   onClick={(e) => handlePrintClientDossie(selectedClient, e)}
-                  className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl text-gray-500 hover:text-indigo-600 transition-all shadow-sm"
+                  className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl text-gray-500 hover:text-teal-600 transition-all shadow-sm"
                   title="Imprimir Relatório"
                 >
                   <Printer size={22} />
@@ -1052,7 +1052,7 @@ const ClientsPage: React.FC = () => {
               <div className="space-y-8">
                 <div className="space-y-6">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Fingerprint size={14} className="text-indigo-500" /> Dados de {selectedClient.tipo === 'PF' ? 'Identidade' : 'Empresa'}
+                    <Fingerprint size={14} className="text-teal-500" /> Dados de {selectedClient.tipo === 'PF' ? 'Identidade' : 'Empresa'}
                   </h4>
                   <div className="space-y-4">
                     <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-3xl border border-transparent">
@@ -1076,11 +1076,11 @@ const ClientsPage: React.FC = () => {
 
                 <div className="space-y-6">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Briefcase size={14} className="text-indigo-500" /> Canais de Contato
+                    <Briefcase size={14} className="text-teal-500" /> Canais de Contato
                   </h4>
                   <div className="space-y-4">
-                    <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-3xl border border-transparent hover:border-indigo-100 transition-all">
-                      <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-600">
+                    <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-3xl border border-transparent hover:border-teal-100 transition-all">
+                      <div className="w-10 h-10 bg-teal-50 dark:bg-teal-900/30 rounded-xl flex items-center justify-center text-teal-600">
                         <Mail size={18} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1088,8 +1088,8 @@ const ClientsPage: React.FC = () => {
                         <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{selectedClient.email}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-3xl border border-transparent hover:border-indigo-100 transition-all">
-                      <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-600">
+                    <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-3xl border border-transparent hover:border-teal-100 transition-all">
+                      <div className="w-10 h-10 bg-teal-50 dark:bg-teal-900/30 rounded-xl flex items-center justify-center text-teal-600">
                         <Phone size={18} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1105,7 +1105,7 @@ const ClientsPage: React.FC = () => {
                 <div className="bg-white dark:bg-gray-900 rounded-[32px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
                   <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
                     <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-                      <Home size={18} className="text-indigo-500" /> Dossiê do Imóvel & Localização
+                      <Home size={18} className="text-teal-500" /> Dossiê do Imóvel & Localização
                     </h3>
                     <span className="px-3 py-1 bg-gray-50 dark:bg-gray-800 rounded-full text-[9px] font-black text-gray-400 uppercase">{selectedClient.imovel.situacaoPosse}</span>
                   </div>
@@ -1121,12 +1121,12 @@ const ClientsPage: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-center">
-                        <Ruler size={20} className="mx-auto text-indigo-500 mb-2" />
+                        <Ruler size={20} className="mx-auto text-teal-500 mb-2" />
                         <p className="text-[8px] font-black text-gray-400 uppercase">Metragem</p>
                         <p className="text-lg font-black text-gray-900 dark:text-white">{selectedClient.imovel.metragemM2}m²</p>
                       </div>
                       <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-center">
-                        <Target size={20} className="mx-auto text-indigo-500 mb-2" />
+                        <Target size={20} className="mx-auto text-teal-500 mb-2" />
                         <p className="text-[8px] font-black text-gray-400 uppercase">Tipo</p>
                         <p className="text-lg font-black text-gray-900 dark:text-white capitalize">{selectedClient.imovel.tipo}</p>
                       </div>
@@ -1135,7 +1135,7 @@ const ClientsPage: React.FC = () => {
                 </div>
 
                 {/* Seção de Briefing no Dossiê */}
-                <div className="bg-indigo-600 rounded-[32px] p-8 text-white shadow-xl shadow-indigo-600/10">
+                <div className="bg-teal-600 rounded-[32px] p-8 text-white shadow-xl shadow-teal-600/10">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
                     <Sparkles size={16} /> Briefing Técnico Consolidado
                   </h3>

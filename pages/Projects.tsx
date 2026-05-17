@@ -81,18 +81,18 @@ const BatchForm: React.FC<{ onSave: (items: any[], header: any) => void, onCance
          <div className="flex-1 overflow-y-auto p-8 space-y-4 no-scrollbar">
             {items.map((it, idx) => (
                <div key={it.id} className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end p-6 bg-gray-50/50 dark:bg-gray-900/50 rounded-[32px] border border-gray-100 dark:border-gray-800 animate-in slide-in-from-right-4 duration-200">
-                  <div className="lg:col-span-1 flex items-center justify-center"><span className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-gray-800 flex items-center justify-center text-[10px] font-black text-indigo-600">{idx + 1}</span></div>
+                  <div className="lg:col-span-1 flex items-center justify-center"><span className="w-8 h-8 rounded-full bg-teal-50 dark:bg-gray-800 flex items-center justify-center text-[10px] font-black text-teal-600">{idx + 1}</span></div>
                   <div className="lg:col-span-5"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Descrição</label><input type="text" value={it.descricao} onChange={e => setItems(items.map(i => i.id === it.id ? { ...i, descricao: e.target.value } : i))} className="w-full bg-transparent font-black text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 outline-none pb-1" /></div>
                   <div className="lg:col-span-2"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Quant.</label><input type="number" step="1" value={it.quantidade} onChange={e => setItems(items.map(i => i.id === it.id ? { ...i, quantidade: parseInt(e.target.value) || 1 } : i))} className="w-full bg-white dark:bg-gray-800 px-3 py-2 rounded-xl font-black text-center" /></div>
                   <div className="lg:col-span-2"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Valor Unit.</label><input type="number" step="0.01" value={it.unitValue} onChange={e => setItems(items.map(i => i.id === it.id ? { ...i, unitValue: parseFloat(e.target.value) || 0 } : i))} className="w-full bg-white dark:bg-gray-800 px-3 py-2 rounded-xl font-black text-center text-rose-500" /></div>
                   <div className="lg:col-span-2 flex justify-center"><button onClick={() => setItems(items.filter(i => i.id !== it.id))} className="p-3 text-gray-300 hover:text-rose-500"><Trash2 size={18} /></button></div>
                </div>
             ))}
-            <button onClick={() => setItems([...items, { id: Date.now().toString(), descricao: '', quantidade: 1, unitValue: 0, categoria: 'material' }])} className="w-full py-5 border-2 border-dashed border-gray-200 rounded-[32px] text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 hover:border-indigo-600 transition-all">+ Adicionar Item à Nota</button>
+            <button onClick={() => setItems([...items, { id: Date.now().toString(), descricao: '', quantidade: 1, unitValue: 0, categoria: 'material' }])} className="w-full py-5 border-2 border-dashed border-gray-200 rounded-[32px] text-[10px] font-black text-gray-400 uppercase hover:text-teal-600 hover:border-teal-600 transition-all">+ Adicionar Item à Nota</button>
          </div>
          <div className="p-8 border-t border-gray-50 dark:border-gray-800 flex flex-col md:flex-row items-center justify-between gap-8 bg-white dark:bg-gray-950 rounded-b-[48px]">
             <div className="flex items-center gap-6"><div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-[28px] flex items-center justify-center"><DollarSign size={32} /></div><div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total do Lote</p><h3 className="text-3xl font-black text-emerald-600">R$ {total.toLocaleString('pt-BR')}</h3></div></div>
-            <div className="flex gap-4 w-full md:w-auto"><button onClick={onCancel} className="flex-1 md:px-8 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black text-[10px] uppercase">Cancelar</button><button onClick={() => onSave(items, header)} className="flex-1 md:px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-xl flex items-center justify-center gap-3"><Check size={20} /> Inserir {items.length} Itens no Projeto</button></div>
+            <div className="flex gap-4 w-full md:w-auto"><button onClick={onCancel} className="flex-1 md:px-8 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black text-[10px] uppercase">Cancelar</button><button onClick={() => onSave(items, header)} className="flex-1 md:px-12 py-4 bg-teal-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-xl flex items-center justify-center gap-3"><Check size={20} /> Inserir {items.length} Itens no Projeto</button></div>
          </div>
       </div>
    );
@@ -190,10 +190,10 @@ const Projects: React.FC = () => {
 
    const fetchCosts = async (projectId: string) => {
       const { data, error } = await supabase
-         .from('expenses')
+         .from('custos_projeto')
          .select('*')
          .eq('project_id', projectId)
-         .order('date', { ascending: false });
+         .order('data_lancamento', { ascending: false });
 
       if (error) {
          console.error('Error fetching costs:', error);
@@ -201,10 +201,10 @@ const Projects: React.FC = () => {
          setCustos(data.map(c => ({
             ...c,
             projetoId: c.project_id,
-            custoUnitario: Number(c.unit_value),
-            custoTotal: Number(c.total_value),
-            dataLancamento: c.date,
-            prestadorNome: c.location
+            custoUnitario: Number(c.custo_unitario),
+            custoTotal: Number(c.custo_total),
+            dataLancamento: c.data_lancamento,
+            prestadorNome: c.prestador_nome
          })) as CustoProjeto[]);
       }
    };
@@ -305,18 +305,18 @@ const Projects: React.FC = () => {
       if (!selectedProject) return;
       const novosCustosPayload = batchItems.map(item => ({
          project_id: selectedProject.id,
-         description: item.descricao,
-         location: batchHeader.fornecedor,
+         descricao: item.descricao,
+         prestador_nome: batchHeader.fornecedor,
          categoria: item.categoria || 'material',
-         quantity: Number(item.quantidade) || 1,
-         unit_value: Number(item.unitValue) || 0,
-         total_value: Number(item.quantidade) * Number(item.unitValue),
-         date: batchHeader.data,
-         type: 'expense',
-         user_id: user?.id
+         quantidade: Number(item.quantidade) || 1,
+         unidade: 'un',
+         custo_unitario: Number(item.unitValue) || 0,
+         custo_total: Number(item.quantidade) * Number(item.unitValue),
+         data_lancamento: batchHeader.data,
+         status: batchHeader.status
       }));
 
-      const { error } = await supabase.from('expenses').insert(novosCustosPayload);
+      const { error } = await supabase.from('custos_projeto').insert(novosCustosPayload);
 
       if (error) {
          setMessage({ text: 'Erro ao salvar custos: ' + error.message, type: 'error' });
@@ -449,20 +449,20 @@ const Projects: React.FC = () => {
                   </div>
                   <button
                      onClick={() => setShowCreateModal(true)}
-                     className="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-700 transition-all shadow-xl flex items-center gap-2"
+                     className="px-6 py-4 bg-teal-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-teal-700 transition-all shadow-xl flex items-center gap-2"
                   >
                      <Plus size={18} /> Nova Obra
                   </button>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {projects.map(project => (
-                     <div key={project.id} onClick={() => setSelectedProject(project)} className="group bg-white dark:bg-gray-900 rounded-[40px] p-8 shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-indigo-200 transition-all cursor-pointer flex flex-col">
+                     <div key={project.id} onClick={() => setSelectedProject(project)} className="group bg-white dark:bg-gray-900 rounded-[40px] p-8 shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-teal-200 transition-all cursor-pointer flex flex-col">
                         <div className="flex items-start justify-between mb-8">
-                           <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-[22px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all"><Hammer size={28} /></div>
+                           <div className="w-16 h-16 bg-teal-50 dark:bg-teal-900/20 rounded-[22px] flex items-center justify-center text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-all"><Hammer size={28} /></div>
                         </div>
                         <div className="mb-8">
                            <div className="flex justify-between items-center mb-1">
-                              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{project.clientName}</p>
+                              <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest">{project.clientName}</p>
                               <button
                                  onClick={(e) => {
                                     e.stopPropagation();
@@ -476,7 +476,7 @@ const Projects: React.FC = () => {
                            </div>
                            <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight">{project.name}</h3>
                         </div>
-                        <div className="mt-auto pt-6 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between text-indigo-600 font-black text-[10px] uppercase tracking-widest">
+                        <div className="mt-auto pt-6 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between text-teal-600 font-black text-[10px] uppercase tracking-widest">
                            <span>Gerenciar Obra</span>
                            <ChevronRight size={18} />
                         </div>
@@ -487,12 +487,12 @@ const Projects: React.FC = () => {
          ) : (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                  <button onClick={() => setSelectedProject(null)} className="flex items-center gap-2 text-gray-400 hover:text-indigo-600 transition-colors font-black uppercase text-[10px] tracking-widest"><ArrowLeft size={16} /> Voltar</button>
+                  <button onClick={() => setSelectedProject(null)} className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors font-black uppercase text-[10px] tracking-widest"><ArrowLeft size={16} /> Voltar</button>
                   <div className="flex gap-2">
-                     <button onClick={() => setShowFiscalModal(true)} className="px-5 py-3 bg-white dark:bg-gray-800 border border-indigo-100 dark:border-indigo-900 rounded-xl text-[10px] font-black uppercase tracking-widest text-indigo-600 flex items-center gap-2 hover:bg-indigo-50 transition-all">
+                     <button onClick={() => setShowFiscalModal(true)} className="px-5 py-3 bg-white dark:bg-gray-800 border border-teal-100 dark:border-teal-900 rounded-xl text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-2 hover:bg-teal-50 transition-all">
                         <CloudDownload size={16} /> Buscar NF (Campo Grande)
                      </button>
-                     <button onClick={() => setShowBatchModal(true)} className="px-5 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2">
+                     <button onClick={() => setShowBatchModal(true)} className="px-5 py-3 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2">
                         <Receipt size={16} /> Lançamento em Lote
                      </button>
                   </div>
@@ -500,11 +500,11 @@ const Projects: React.FC = () => {
 
                <div className="bg-white dark:bg-gray-900 rounded-[48px] p-10 border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden relative">
                   <div className="flex items-center gap-6 mb-10">
-                     <div className="w-20 h-20 bg-indigo-600 rounded-[28px] flex items-center justify-center text-white shadow-2xl"><Hammer size={32} /></div>
+                     <div className="w-20 h-20 bg-teal-600 rounded-[28px] flex items-center justify-center text-white shadow-2xl"><Hammer size={32} /></div>
                      <div>
                         <h1 className="text-3xl font-black text-gray-900 dark:text-white leading-tight">{selectedProject.name}</h1>
                         <div className="flex items-center gap-3 mt-1">
-                           <span className="px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest">Cliente: {selectedProject.clientName}</span>
+                           <span className="px-4 py-1.5 bg-teal-50 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 rounded-full text-[10px] font-black uppercase tracking-widest">Cliente: {selectedProject.clientName}</span>
                            <button
                               onClick={() => window.open(createWhatsappLink('11999999999', `Olá ${selectedProject.clientName}, atualizações sobre a obra *${selectedProject.name}*.`), '_blank')}
                               className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
@@ -519,7 +519,7 @@ const Projects: React.FC = () => {
                      <div className="p-6 bg-gray-50 dark:bg-gray-800/40 rounded-[32px]"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Budget Contratado</p><p className="text-2xl font-black text-gray-900 dark:text-white">R$ {selectedProject.totalBudget.toLocaleString('pt-BR')}</p></div>
                      <div className="p-6 bg-gray-50 dark:bg-gray-800/40 rounded-[32px]"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Lançado</p><p className="text-2xl font-black text-rose-600">R$ {resumo?.custosPlanejados.toLocaleString('pt-BR')}</p></div>
                      <div className="p-6 bg-emerald-50 dark:bg-emerald-900/10 rounded-[32px] border border-emerald-100 dark:border-emerald-800"><p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Lucro Estimado</p><p className="text-2xl font-black text-emerald-600">R$ {resumo?.margemPlanejada.toLocaleString('pt-BR')}</p></div>
-                     <div className="p-6 bg-indigo-50 dark:bg-indigo-900/10 rounded-[32px] border border-indigo-100 dark:border-indigo-800"><p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Markup Real</p><p className="text-2xl font-black text-indigo-600">{resumo && resumo.custosPlanejados > 0 ? ((resumo.margemPlanejada / resumo.custosPlanejados) * 100).toFixed(1) : '0'}%</p></div>
+                     <div className="p-6 bg-teal-50 dark:bg-teal-900/10 rounded-[32px] border border-teal-100 dark:border-teal-800"><p className="text-[10px] font-black text-teal-600 uppercase tracking-widest mb-1">Markup Real</p><p className="text-2xl font-black text-teal-600">{resumo && resumo.custosPlanejados > 0 ? ((resumo.margemPlanejada / resumo.custosPlanejados) * 100).toFixed(1) : '0'}%</p></div>
                   </div>
                </div>
 
@@ -541,41 +541,41 @@ const Projects: React.FC = () => {
                      <div className="flex border-b border-gray-100 dark:border-gray-800 mb-8 mt-4">
                         <button
                            onClick={() => setActiveTab('overview')}
-                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'overview' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'overview' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                            Visão Geral
-                           {activeTab === 'overview' && <div className="absolute bottom-0 left-0 w-full h-1 bg-indigo-600 rounded-t-full" />}
+                           {activeTab === 'overview' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                         <button
                            onClick={() => setActiveTab('finance')}
-                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'finance' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'finance' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                            Financeiro
-                           {activeTab === 'finance' && <div className="absolute bottom-0 left-0 w-full h-1 bg-indigo-600 rounded-t-full" />}
+                           {activeTab === 'finance' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                         <button
                            onClick={() => setActiveTab('quality')}
-                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'quality' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'quality' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                            Qualidade & Vistorias
-                           {activeTab === 'quality' && <div className="absolute bottom-0 left-0 w-full h-1 bg-indigo-600 rounded-t-full" />}
+                           {activeTab === 'quality' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                      </div>
                      {activeTab === 'quality' && (
                         <div className="space-y-8 animate-in fade-in duration-300">
 
                            <div className="flex justify-between items-center">
-                              <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2"><ClipboardCheck className="text-indigo-600" /> Vistorias & Qualidade</h3>
+                              <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2"><ClipboardCheck className="text-teal-600" /> Vistorias & Qualidade</h3>
                               <div className="flex gap-2">
                                  <button onClick={() => setShowNonConformityModal(true)} className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 flex items-center gap-2 transition-all"><AlertTriangle size={14} /> Reportar Problema</button>
-                                 <button onClick={() => setShowInspectionModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 flex items-center gap-2 transition-all shadow-lg shadow-indigo-200 dark:shadow-none"><Plus size={14} /> Nova Vistoria</button>
+                                 <button onClick={() => setShowInspectionModal(true)} className="px-4 py-2 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-700 flex items-center gap-2 transition-all shadow-lg shadow-teal-200 dark:shadow-none"><Plus size={14} /> Nova Vistoria</button>
                               </div>
                            </div>
 
                            {/* Resumo de Qualidade */}
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div className="p-6 bg-indigo-50 dark:bg-indigo-900/10 rounded-[32px] border border-indigo-100 dark:border-indigo-800">
-                                 <h4 className="text-[10px] font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-widest mb-4">Histórico de Vistorias</h4>
+                              <div className="p-6 bg-teal-50 dark:bg-teal-900/10 rounded-[32px] border border-teal-100 dark:border-teal-800">
+                                 <h4 className="text-[10px] font-black text-teal-900 dark:text-teal-300 uppercase tracking-widest mb-4">Histórico de Vistorias</h4>
                                  <div className="space-y-3">
                                     {(selectedProject.inspections || []).length === 0 ? <p className="text-sm text-gray-400 italic">Nenhuma vistoria realizada.</p> :
                                        (selectedProject.inspections || []).map(insp => (
@@ -639,9 +639,9 @@ const Projects: React.FC = () => {
          {showFiscalModal && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[300] p-4 backdrop-blur-xl">
                <div className="bg-white dark:bg-gray-950 rounded-[48px] w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-800 overflow-hidden">
-                  <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-900/20">
+                  <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between bg-teal-50/50 dark:bg-teal-900/20">
                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl"><CloudDownload size={28} /></div>
+                        <div className="w-14 h-14 bg-teal-600 rounded-2xl flex items-center justify-center text-white shadow-xl"><CloudDownload size={28} /></div>
                         <div>
                            <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">API Fiscal Campo Grande</h2>
                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Sincronização Direta com a SEFIN MS</p>
@@ -664,9 +664,9 @@ const Projects: React.FC = () => {
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Código de Verificação (Autenticidade)</label>
                         <input type="text" value={fiscalParams.codigoVerificacao} onChange={(e) => setFiscalParams({ ...fiscalParams, codigoVerificacao: e.target.value })} placeholder="Ex: A1B2-C3D4" className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold uppercase" />
                      </div>
-                     <div className="p-6 bg-indigo-50 dark:bg-indigo-900/10 rounded-3xl border border-indigo-100 dark:border-indigo-800 flex items-start gap-4">
-                        <Building size={20} className="text-indigo-600 shrink-0" />
-                        <p className="text-xs font-bold text-indigo-900 dark:text-indigo-300 leading-relaxed italic">
+                     <div className="p-6 bg-teal-50 dark:bg-teal-900/10 rounded-3xl border border-teal-100 dark:border-teal-800 flex items-start gap-4">
+                        <Building size={20} className="text-teal-600 shrink-0" />
+                        <p className="text-xs font-bold text-teal-900 dark:text-teal-300 leading-relaxed italic">
                            Dica: Você pode encontrar esses dados no rodapé da NFS-e ou no portal nfse.pmcg.ms.gov.br. A importação irá converter o valor total da nota em um custo realizado para este projeto.
                         </p>
                      </div>
@@ -675,7 +675,7 @@ const Projects: React.FC = () => {
                         <button
                            onClick={handleFetchFiscal}
                            disabled={isFetchingFiscal}
-                           className="flex-1 py-5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 disabled:opacity-50"
+                           className="flex-1 py-5 bg-teal-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 disabled:opacity-50"
                         >
                            {isFetchingFiscal ? <Loader2 className="animate-spin" size={18} /> : <CloudDownload size={18} />}
                            {isFetchingFiscal ? 'Conectando SEFIN...' : 'Sincronizar Nota Fiscal'}
@@ -692,7 +692,7 @@ const Projects: React.FC = () => {
                <div className="bg-white dark:bg-gray-950 rounded-[48px] w-full max-w-5xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-800 flex flex-col">
                   <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex flex-col md:flex-row md:items-center justify-between gap-6 shrink-0 bg-gray-50/50 dark:bg-gray-900/50 rounded-t-[48px]">
                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl"><Receipt size={28} /></div>
+                        <div className="w-14 h-14 bg-teal-600 rounded-2xl flex items-center justify-center text-white shadow-xl"><Receipt size={28} /></div>
                         <div><h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Check-out de Nota Fiscal</h2><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Multi-lançamento para o projeto {selectedProject?.name}</p></div>
                      </div>
                      <button onClick={() => setShowBatchModal(false)} className="p-4 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-2xl transition-all"><X size={24} /></button>
@@ -708,7 +708,7 @@ const Projects: React.FC = () => {
                <div className="bg-white dark:bg-gray-900 w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-800 animate-in zoom-in-95 duration-200 h-[80vh] flex flex-col">
                   <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
                      <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                        <ClipboardCheck className="text-indigo-600" /> Nova Vistoria
+                        <ClipboardCheck className="text-teal-600" /> Nova Vistoria
                      </h3>
                      <button onClick={() => setShowInspectionModal(false)} className="p-2 hover:bg-white dark:hover:bg-gray-700 rounded-full transition-all">
                         <X size={20} className="text-gray-400" />
@@ -722,9 +722,9 @@ const Projects: React.FC = () => {
                               <button
                                  key={tpl.id}
                                  onClick={() => setSelectedTemplate(tpl)}
-                                 className="p-6 text-left bg-gray-50 dark:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-500 hover:shadow-lg transition-all group"
+                                 className="p-6 text-left bg-gray-50 dark:bg-gray-800 rounded-2xl border border-transparent hover:border-teal-500 hover:shadow-lg transition-all group"
                               >
-                                 <h4 className="font-bold text-gray-900 dark:text-white mb-1 group-hover:text-indigo-600">{tpl.name}</h4>
+                                 <h4 className="font-bold text-gray-900 dark:text-white mb-1 group-hover:text-teal-600">{tpl.name}</h4>
                                  <p className="text-xs text-gray-500 dark:text-gray-400">{tpl.description}</p>
                               </button>
                            ))}
@@ -732,15 +732,15 @@ const Projects: React.FC = () => {
                      ) : (
                         <div className="space-y-6">
                            <div className="flex items-center justify-between">
-                              <h4 className="font-black text-lg text-indigo-900 dark:text-indigo-300">{selectedTemplate.name}</h4>
-                              <button onClick={() => setSelectedTemplate(null)} className="text-xs font-bold text-gray-400 hover:text-indigo-600 underline">Alterar Template</button>
+                              <h4 className="font-black text-lg text-teal-900 dark:text-teal-300">{selectedTemplate.name}</h4>
+                              <button onClick={() => setSelectedTemplate(null)} className="text-xs font-bold text-gray-400 hover:text-teal-600 underline">Alterar Template</button>
                            </div>
 
                            <div className="space-y-3">
                               <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Checklist</p>
                               {selectedTemplate.items.map(item => (
                                  <label key={item} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors">
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${currentInspectionItems.includes(item) ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-300 dark:border-gray-600'
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${currentInspectionItems.includes(item) ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 dark:border-gray-600'
                                        }`}>
                                        {currentInspectionItems.includes(item) && <Check size={12} />}
                                     </div>
@@ -760,7 +760,7 @@ const Projects: React.FC = () => {
 
                            <div>
                               <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Evidência Fotográfica</p>
-                              <label className="block w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all text-gray-400 hover:text-indigo-500 relative overflow-hidden">
+                              <label className="block w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all text-gray-400 hover:text-teal-500 relative overflow-hidden">
                                  {inspectionPhoto ? (
                                     <img src={inspectionPhoto} alt="Preview" className="w-full h-full object-cover" />
                                  ) : (
@@ -786,7 +786,7 @@ const Projects: React.FC = () => {
                         </button>
                         <button
                            onClick={() => handleCreateInspection('approved')}
-                           className="py-3 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+                           className="py-3 bg-teal-600 text-white rounded-xl font-black uppercase tracking-widest hover:bg-teal-700 transition-colors shadow-lg shadow-teal-200 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
                            disabled={currentInspectionItems.length === 0}
                         >
                            Aprovar Vistoria
@@ -893,7 +893,7 @@ const Projects: React.FC = () => {
                         <input
                            type="text"
                            placeholder="Ex: Reforma Apartamento 101"
-                           className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500/20"
+                           className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-teal-500/20"
                            value={newProjectForm.name}
                            onChange={(e) => setNewProjectForm({ ...newProjectForm, name: e.target.value })}
                            autoFocus
@@ -913,7 +913,7 @@ const Projects: React.FC = () => {
                               />
                               <button
                                  onClick={() => setNewProjectForm(prev => ({ ...prev, clientId: '', clientName: '' }))}
-                                 className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                                 className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-teal-600 hover:text-teal-800"
                               >
                                  Trocar
                               </button>
@@ -921,7 +921,7 @@ const Projects: React.FC = () => {
                         ) : (
                            // Modo: Seleção de Cliente
                            <select
-                              className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500/20 appearance-none"
+                              className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-none outline-none font-bold text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-teal-500/20 appearance-none"
                               value={newProjectForm.clientId}
                               onChange={(e) => {
                                  const selectedClient = clients.find(c => c.id === e.target.value);
@@ -981,7 +981,7 @@ const Projects: React.FC = () => {
                      <button
                         onClick={handleCreateProject}
                         disabled={!newProjectForm.name || !newProjectForm.clientName}
-                        className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                        className="w-full py-5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                      >
                         Criar Obra e Começar
                      </button>

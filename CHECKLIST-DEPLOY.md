@@ -38,7 +38,7 @@ Data: 25/01/2026
 
 ⚠️ **CRÍTICO**: Configure ANTES de fazer deploy!
 
-- [ ] `VITE_SUPABASE_URL` = `https://yktthhpupvegkwsqhwtv.supabase.co`
+- [ ] `VITE_SUPABASE_URL` = `https://jgrboitrmckcdzdfzfkf.supabase.co`
 - [ ] `VITE_SUPABASE_ANON_KEY` = (Cole a chave do `.env.local`)
 - [ ] Marcar: Production ✓ Preview ✓ Development ✓
 
@@ -96,7 +96,7 @@ Data: 25/01/2026
 
 ### Supabase não conecta?
 1. Verificar variáveis na Vercel
-2. Testar URL: `https://yktthhpupvegkwsqhwtv.supabase.co/rest/v1/`
+2. Testar URL: `https://jgrboitrmckcdzdfzfkf.supabase.co/rest/v1/`
 3. Verificar chave não está expirada
 4. Fazer redeploy após corrigir
 

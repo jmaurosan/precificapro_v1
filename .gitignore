@@ -18,3 +18,8 @@ Thumbs.db
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Artefatos locais/temporários
+dev-dist/
+testsprite_tests/tmp/
+supabase/.temp/
