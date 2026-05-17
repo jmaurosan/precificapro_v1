@@ -63,11 +63,13 @@ const Auth: React.FC = () => {
       }
     } else {
       if (!name) return setError('Nome é obrigatório para cadastro.');
-      const { error: signUpError } = await signUp(email, password, name);
+      const { error: signUpError, needsEmailConfirmation } = await signUp(email, password, name);
       if (signUpError) {
         setError(getFriendlyAuthError(signUpError) || 'Erro ao criar conta.');
       } else {
-        setMessage('Conta criada com sucesso! Verifique seu email para confirmar o acesso.');
+        setMessage(needsEmailConfirmation
+          ? 'Conta criada com sucesso! Verifique seu email para confirmar o acesso.'
+          : 'Conta criada com sucesso! Você já pode acessar o sistema.');
       }
     }
   };

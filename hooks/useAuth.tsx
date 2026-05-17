@@ -8,7 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: any; needsEmailConfirmation?: boolean }>;
   logout: () => Promise<void>;
   signInWithProvider: (provider: 'google' | 'apple') => Promise<{ error: any }>;
 }
@@ -52,7 +52,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // 2. Ouvir mudanças de estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
-        await fetchProfile(session.user.id, session.user.email!);
+        const fullName = typeof session.user.user_metadata?.full_name === 'string'
+          ? session.user.user_metadata.full_name
+          : undefined;
+        await fetchProfile(session.user.id, session.user.email!, fullName);
       } else {
         setUser(null);
         setIsLoading(false);
@@ -64,7 +67,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const fetchProfile = async (userId: string, email: string) => {
+  const fetchProfile = async (userId: string, email: string, fallbackName?: string) => {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -84,16 +87,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           createdAt: new Date(profile.created_at)
         });
       } else {
+        const profileName = fallbackName || email.split('@')[0];
+
         // Criar perfil se não existir (primeiro login social e.x.)
         const { error: insertError } = await supabase
           .from('profiles')
-          .insert([{ id: userId, name: email.split('@')[0] }]);
+          .insert([{ id: userId, name: profileName }]);
 
         if (!insertError) {
           setUser({
             id: userId,
             email: email,
-            name: email.split('@')[0],
+            name: profileName,
             role: 'user',
             company: 'Individual',
             createdAt: new Date()
@@ -125,8 +130,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     });
 
-    if (error || !data.session) setIsLoading(false);
-    return { error };
+    if (error || !data.session) {
+      setIsLoading(false);
+      return { error, needsEmailConfirmation: !error && !data.session };
+    }
+
+    if (data.user) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert([{ id: data.user.id, name }], { onConflict: 'id' });
+
+      if (profileError) {
+        console.error('Error saving signup profile:', profileError);
+      }
+
+      await fetchProfile(data.user.id, email, name);
+    }
+
+    return { error: null, needsEmailConfirmation: false };
   };
 
   const signInWithProvider = async (provider: 'google' | 'apple') => {
