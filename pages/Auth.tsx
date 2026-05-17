@@ -14,6 +14,28 @@ const Auth: React.FC = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
+  const getFriendlyAuthError = (authError: { message?: string } | null | undefined) => {
+    const errorMessage = authError?.message || '';
+
+    if (errorMessage.includes('Signups not allowed')) {
+      return 'O cadastro de novos usuários está desativado no Supabase. Ative em Authentication > Providers > Email > Allow new users to sign up.';
+    }
+
+    if (errorMessage.includes('Invalid login credentials')) {
+      return 'Email ou senha inválidos. Verifique os dados e tente novamente.';
+    }
+
+    if (errorMessage.includes('Email not confirmed')) {
+      return 'Seu email ainda não foi confirmado. Verifique sua caixa de entrada.';
+    }
+
+    if (errorMessage.includes('Failed to fetch')) {
+      return 'Não foi possível conectar ao Supabase. Verifique sua conexão e as variáveis do projeto.';
+    }
+
+    return errorMessage;
+  };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -37,13 +59,13 @@ const Auth: React.FC = () => {
     if (isLogin) {
       const { error: loginError } = await login(email, password);
       if (loginError) {
-        setError(loginError.message || 'Falha no login. Verifique suas credenciais.');
+        setError(getFriendlyAuthError(loginError) || 'Falha no login. Verifique suas credenciais.');
       }
     } else {
       if (!name) return setError('Nome é obrigatório para cadastro.');
       const { error: signUpError } = await signUp(email, password, name);
       if (signUpError) {
-        setError(signUpError.message || 'Erro ao criar conta.');
+        setError(getFriendlyAuthError(signUpError) || 'Erro ao criar conta.');
       } else {
         setMessage('Conta criada com sucesso! Verifique seu email para confirmar o acesso.');
       }
