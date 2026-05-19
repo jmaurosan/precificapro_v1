@@ -78,12 +78,47 @@ const ClientsPage: React.FC = () => {
     briefing: {
       objetivo: '',
       estilo: '',
-      prazo: 'curto'
+      prazo: 'curto',
+      tipoProjeto: 'reforma_residencial',
+      ambientes: [],
+      orcamentoEstimado: '',
+      prioridade: 'qualidade',
+      doresAtuais: '',
+      referencias: '',
+      observacoesComerciais: ''
     },
     status: 'novo'
   };
 
   const [formData, setFormData] = useState<any>(initialFormState);
+  const [selectedStatus, setSelectedStatus] = useState<StatusLead | 'todos'>('todos');
+  const [viewMode, setViewMode] = useState<'pipeline' | 'lista'>('pipeline');
+
+  const pipelineStages: Array<{ id: StatusLead; label: string; hint: string; accent: string }> = [
+    { id: 'novo', label: 'Lead novo', hint: 'Contato inicial e triagem', accent: 'amber' },
+    { id: 'em_briefing', label: 'Em briefing', hint: 'Levantamento de necessidades', accent: 'blue' },
+    { id: 'proposta_enviada', label: 'Proposta enviada', hint: 'Aguardando retorno', accent: 'violet' },
+    { id: 'contratado', label: 'Contratado', hint: 'Pronto para virar obra', accent: 'teal' },
+    { id: 'perdido', label: 'Perdido', hint: 'Sem continuidade', accent: 'rose' },
+  ];
+
+  const briefingOptions = {
+    tiposProjeto: [
+      { value: 'reforma_residencial', label: 'Reforma residencial' },
+      { value: 'interiores', label: 'Projeto de interiores' },
+      { value: 'comercial', label: 'Ambiente comercial' },
+      { value: 'consultoria', label: 'Consultoria técnica' },
+      { value: 'obra_completa', label: 'Obra completa' },
+    ],
+    ambientes: ['Sala', 'Cozinha', 'Banheiro', 'Quarto', 'Suite', 'Varanda', 'Area gourmet', 'Escritorio', 'Loja', 'Clinica'],
+    prioridades: [
+      { value: 'prazo', label: 'Prazo' },
+      { value: 'custo', label: 'Custo' },
+      { value: 'qualidade', label: 'Qualidade' },
+      { value: 'estetica', label: 'Estetica' },
+      { value: 'funcionalidade', label: 'Funcionalidade' },
+    ],
+  };
 
   const handlePrintClientDossie = (client: Client, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -175,8 +210,21 @@ const ClientsPage: React.FC = () => {
     if (error) {
       console.error('Error fetching clients:', error);
     } else {
-      setClients(data.map(c => ({
-        ...c,
+      setClients((data || []).map(c => ({
+        id: c.id,
+        tipo: c.tipo,
+        nome: c.nome,
+        fantasia: c.fantasia || '',
+        inscricaoEstadual: c.inscricao_estadual || '',
+        nascimento: c.nascimento || '',
+        cpfCnpj: c.cpf_cnpj || '',
+        email: c.email || '',
+        telefones: c.telefones || { celular: '', whatsapp: '' },
+        enderecoCorrespondencia: c.endereco_correspondencia,
+        imovel: c.imovel || initialFormState.imovel,
+        status: c.status || 'novo',
+        briefing: c.briefing || initialFormState.briefing,
+        documentos: c.documentos || [],
         createdAt: new Date(c.created_at)
       })) as Client[]);
     }
@@ -214,6 +262,38 @@ const ClientsPage: React.FC = () => {
         setClients(clients.filter(c => c.id !== id));
       }
     }
+  };
+
+  const handleChangeClientStatus = async (client: Client, status: StatusLead, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    const { error } = await supabase
+      .from('clients')
+      .update({ status })
+      .eq('id', client.id);
+
+    if (error) {
+      setMessage({ text: 'Erro ao atualizar etapa comercial: ' + error.message, type: 'error' });
+      setTimeout(() => setMessage(null), 3500);
+      return;
+    }
+
+    setClients((current) => current.map((item) => item.id === client.id ? { ...item, status } : item));
+  };
+
+  const toggleBriefingEnvironment = (environment: string) => {
+    const current = formData.briefing?.ambientes || [];
+    const next = current.includes(environment)
+      ? current.filter((item: string) => item !== environment)
+      : [...current, environment];
+
+    setFormData({
+      ...formData,
+      briefing: {
+        ...formData.briefing,
+        ambientes: next,
+      }
+    });
   };
 
   const handleConsultarCep = async (cep: string) => {
@@ -264,10 +344,10 @@ const ClientsPage: React.FC = () => {
       cpf_cnpj: formData.cpfCnpj,
       email: formData.email,
       telefones: formData.telefones,
+      endereco_correspondencia: formData.enderecoCorrespondencia,
       imovel: formData.imovel,
       status: formData.status,
       briefing: formData.briefing,
-      documentos: formData.documentos || [],
       user_id: user?.id
     };
 
@@ -432,12 +512,33 @@ const ClientsPage: React.FC = () => {
     }
   };
 
-  const filteredClients = clients.filter(
-    (client) =>
-      client.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.cpfCnpj.includes(searchTerm)
-  );
+  const filteredClients = clients.filter((client) => {
+    const search = searchTerm.toLowerCase();
+    const matchesStatus = selectedStatus === 'todos' || client.status === selectedStatus;
+    const matchesSearch =
+      client.nome.toLowerCase().includes(search) ||
+      client.email.toLowerCase().includes(search) ||
+      client.cpfCnpj.includes(searchTerm) ||
+      (client.briefing?.objetivo || '').toLowerCase().includes(search) ||
+      (client.briefing?.tipoProjeto || '').toLowerCase().includes(search);
+
+    return matchesStatus && matchesSearch;
+  });
+
+  const clientsByStage = pipelineStages.map((stage) => ({
+    ...stage,
+    clients: clients.filter((client) => {
+      const search = searchTerm.toLowerCase();
+      const matchesSearch =
+        !searchTerm ||
+        client.nome.toLowerCase().includes(search) ||
+        client.email.toLowerCase().includes(search) ||
+        client.cpfCnpj.includes(searchTerm) ||
+        (client.briefing?.objetivo || '').toLowerCase().includes(search);
+
+      return client.status === stage.id && matchesSearch;
+    }),
+  }));
 
   const getStatusStyle = (status: StatusLead) => {
     switch (status) {
@@ -446,6 +547,21 @@ const ClientsPage: React.FC = () => {
       case 'novo': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
       case 'perdido': return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
       default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getStatusLabel = (status: StatusLead) => {
+    return pipelineStages.find((stage) => stage.id === status)?.label || status.replace('_', ' ');
+  };
+
+  const getPipelineAccent = (accent: string) => {
+    switch (accent) {
+      case 'amber': return 'border-amber-100 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300';
+      case 'blue': return 'border-blue-100 bg-blue-50/70 dark:border-blue-900/40 dark:bg-blue-900/10 text-blue-700 dark:text-blue-300';
+      case 'violet': return 'border-violet-100 bg-violet-50/70 dark:border-violet-900/40 dark:bg-violet-900/10 text-violet-700 dark:text-violet-300';
+      case 'teal': return 'border-teal-100 bg-teal-50/70 dark:border-teal-900/40 dark:bg-teal-900/10 text-teal-700 dark:text-teal-300';
+      case 'rose': return 'border-rose-100 bg-rose-50/70 dark:border-rose-900/40 dark:bg-rose-900/10 text-rose-700 dark:text-rose-300';
+      default: return 'border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-900 text-gray-600 dark:text-gray-300';
     }
   };
 
@@ -469,13 +585,122 @@ const ClientsPage: React.FC = () => {
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
         <input
           type="text"
-          placeholder="Buscar por nome, CPF/CNPJ ou e-mail..."
+          placeholder="Buscar por nome, CPF/CNPJ, e-mail, objetivo ou tipo de reforma..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 text-gray-900 dark:text-white transition-all shadow-sm font-bold"
         />
       </div>
 
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1">
+            {pipelineStages.map((stage) => {
+              const total = clients.filter((client) => client.status === stage.id).length;
+              return (
+                <button
+                  key={stage.id}
+                  type="button"
+                  onClick={() => setSelectedStatus(selectedStatus === stage.id ? 'todos' : stage.id)}
+                  className={`p-4 rounded-2xl border text-left transition-all ${getPipelineAccent(stage.accent)} ${selectedStatus === stage.id ? 'ring-2 ring-teal-500 shadow-lg' : 'hover:-translate-y-0.5 hover:shadow-md'}`}
+                >
+                  <p className="text-[10px] font-black uppercase tracking-widest">{stage.label}</p>
+                  <div className="flex items-end justify-between mt-2">
+                    <span className="text-2xl font-black">{total}</span>
+                    <span className="text-[9px] font-bold uppercase opacity-70">{stage.hint}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex p-1.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm">
+            <button
+              type="button"
+              onClick={() => setViewMode('pipeline')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'pipeline' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+            >
+              Pipeline
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('lista')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'lista' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+            >
+              Lista
+            </button>
+          </div>
+        </div>
+
+        {selectedStatus !== 'todos' && (
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('todos')}
+            className="w-fit px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+          >
+            Limpar filtro: {getStatusLabel(selectedStatus)}
+          </button>
+        )}
+      </div>
+
+      {viewMode === 'pipeline' ? (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+          {clientsByStage.map((stage) => (
+            <div key={stage.id} className="bg-white/70 dark:bg-gray-900/70 rounded-[28px] border border-gray-100 dark:border-gray-800 p-4 min-h-[260px]">
+              <div className={`p-4 rounded-2xl border mb-4 ${getPipelineAccent(stage.accent)}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest">{stage.label}</p>
+                    <p className="text-[9px] font-bold uppercase opacity-70 mt-1">{stage.hint}</p>
+                  </div>
+                  <span className="text-2xl font-black">{stage.clients.length}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {stage.clients.length === 0 ? (
+                  <div className="py-10 text-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
+                    <Target size={22} className="mx-auto text-gray-300 mb-2" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Sem leads</p>
+                  </div>
+                ) : stage.clients.map((client) => (
+                  <button
+                    key={client.id}
+                    type="button"
+                    onClick={() => handleOpenEdit(client)}
+                    className="w-full text-left p-4 bg-white dark:bg-gray-950 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-900 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-black text-sm text-gray-900 dark:text-white truncate">{client.nome}</p>
+                        <p className="text-[10px] font-bold text-gray-400 truncate mt-1">{client.briefing?.tipoProjeto || client.imovel?.tipo || 'Sem tipo definido'}</p>
+                      </div>
+                      <span className={`shrink-0 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${getStatusStyle(client.status)}`}>{client.tipo}</span>
+                    </div>
+                    <p className="mt-3 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400 line-clamp-2">
+                      {client.briefing?.objetivo || 'Briefing ainda não preenchido.'}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {pipelineStages
+                        .filter((nextStage) => nextStage.id !== client.status)
+                        .slice(0, 2)
+                        .map((nextStage) => (
+                          <span
+                            key={nextStage.id}
+                            onClick={(e) => handleChangeClientStatus(client, nextStage.id, e)}
+                            className="px-2.5 py-1 bg-gray-50 dark:bg-gray-900 rounded-lg text-[8px] font-black uppercase tracking-widest text-gray-400 hover:bg-teal-600 hover:text-white transition-all cursor-pointer"
+                          >
+                            {nextStage.label}
+                          </span>
+                        ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredClients.map((client) => (
           <div
@@ -552,6 +777,7 @@ const ClientsPage: React.FC = () => {
           </div>
         ))}
       </div>
+      )}
 
       {/* Modal Cadastro de Cliente (Tabs) */}
       {showModal && (
@@ -666,7 +892,7 @@ const ClientsPage: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                     <div className="space-y-3">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                         {formData.tipo === 'PF' ? 'CPF' : 'CNPJ'}
@@ -679,7 +905,7 @@ const ClientsPage: React.FC = () => {
                       />
                     </div>
 
-                    {formData.tipo === 'PF' ? (
+                    {formData.tipo === 'PF' && (
                       <div className="space-y-3 animate-in fade-in duration-300">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Data de Nascimento</label>
                         <div className="relative">
@@ -692,20 +918,22 @@ const ClientsPage: React.FC = () => {
                           />
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status Comercial</label>
-                        <select
-                          value={formData.status}
-                          onChange={(e) => setFormData({ ...formData, status: e.target.value as StatusLead })}
-                          className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
-                        >
-                          <option value="novo">Lead Novo</option>
-                          <option value="em_briefing">Em Briefing</option>
-                          <option value="contratado">Contratado</option>
-                        </select>
-                      </div>
                     )}
+
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status Comercial</label>
+                      <select
+                        value={formData.status}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.value as StatusLead })}
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
+                      >
+                        <option value="novo">Lead novo</option>
+                        <option value="em_briefing">Em briefing</option>
+                        <option value="proposta_enviada">Proposta enviada</option>
+                        <option value="contratado">Contratado</option>
+                        <option value="perdido">Perdido</option>
+                      </select>
+                    </div>
 
                     <div className="space-y-3">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp</label>
@@ -816,25 +1044,90 @@ const ClientsPage: React.FC = () => {
                       <Sparkles size={24} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-black text-teal-900 dark:text-teal-300 uppercase tracking-widest">Objetivo da Obra</h4>
-                      <p className="text-xs font-medium text-teal-700 dark:text-teal-400 mt-1 leading-relaxed">Defina os desejos do cliente para alimentar a calculadora de orçamento de forma inteligente.</p>
+                      <h4 className="text-sm font-black text-teal-900 dark:text-teal-300 uppercase tracking-widest">Briefing Comercial Guiado</h4>
+                      <p className="text-xs font-medium text-teal-700 dark:text-teal-400 mt-1 leading-relaxed">Registre o contexto da reforma para qualificar o lead, montar proposta e reduzir retrabalho antes da visita técnica.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Briefcase size={12} className="text-teal-500" /> Tipo de Projeto</label>
+                      <select
+                        value={formData.briefing?.tipoProjeto || 'reforma_residencial'}
+                        onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, tipoProjeto: e.target.value } })}
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
+                      >
+                        {briefingOptions.tiposProjeto.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><CreditCard size={12} className="text-teal-500" /> Orçamento Estimado</label>
+                      <input
+                        type="text"
+                        value={formData.briefing?.orcamentoEstimado || ''}
+                        onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, orcamentoEstimado: e.target.value } })}
+                        placeholder="Ex: R$ 80 mil a R$ 120 mil"
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Target size={12} className="text-teal-500" /> Prioridade Principal</label>
+                      <select
+                        value={formData.briefing?.prioridade || 'qualidade'}
+                        onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, prioridade: e.target.value } })}
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
+                      >
+                        {briefingOptions.prioridades.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><AlignLeft size={12} className="text-teal-500" /> Descrição da Necessidade</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Home size={12} className="text-teal-500" /> Ambientes Envolvidos</label>
+                    <div className="flex flex-wrap gap-2">
+                      {briefingOptions.ambientes.map((environment) => {
+                        const isSelected = (formData.briefing?.ambientes || []).includes(environment);
+                        return (
+                          <button
+                            key={environment}
+                            type="button"
+                            onClick={() => toggleBriefingEnvironment(environment)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${isSelected
+                              ? 'bg-teal-600 border-teal-600 text-white shadow-md'
+                              : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-400 hover:border-teal-300 hover:text-teal-600'
+                              }`}
+                          >
+                            {environment}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><AlignLeft size={12} className="text-teal-500" /> Objetivo da Reforma</label>
                     <textarea
                       value={formData.briefing?.objetivo}
                       onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, objetivo: e.target.value } })}
-                      placeholder="Ex: Reforma de interiores focada em integração de ambientes e automação de iluminação..."
-                      className="w-full px-6 py-5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[32px] font-bold outline-none text-gray-900 dark:text-white resize-none h-40 focus:border-teal-500"
+                      placeholder="Ex: Integrar cozinha e sala, melhorar iluminação, criar área gourmet e modernizar banheiros."
+                      className="w-full px-6 py-5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[32px] font-bold outline-none text-gray-900 dark:text-white resize-none h-32 focus:border-teal-500"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12} className="text-teal-500" /> Estilo / Referências</label>
-                      <input type="text" value={formData.briefing?.estilo} onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, estilo: e.target.value } })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white" />
+                      <input
+                        type="text"
+                        value={formData.briefing?.estilo}
+                        onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, estilo: e.target.value } })}
+                        placeholder="Ex: contemporâneo, minimalista, industrial"
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold outline-none text-gray-900 dark:text-white"
+                      />
                     </div>
                     <div className="space-y-3">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Clock size={12} className="text-teal-500" /> Expectativa de Prazo</label>
@@ -848,6 +1141,37 @@ const ClientsPage: React.FC = () => {
                         <option value="longo">Futuro (Acima de 1 ano)</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><FileSearch size={12} className="text-teal-500" /> Dores Atuais</label>
+                      <textarea
+                        value={formData.briefing?.doresAtuais || ''}
+                        onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, doresAtuais: e.target.value } })}
+                        placeholder="Ex: pouca tomada, infiltração, circulação ruim, falta de espaço."
+                        className="w-full px-6 py-5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[28px] font-bold outline-none text-gray-900 dark:text-white resize-none h-28 focus:border-teal-500"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Image size={12} className="text-teal-500" /> Links / Referências</label>
+                      <textarea
+                        value={formData.briefing?.referencias || ''}
+                        onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, referencias: e.target.value } })}
+                        placeholder="Links de Pinterest, Instagram, fotos ou observações de referência."
+                        className="w-full px-6 py-5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[28px] font-bold outline-none text-gray-900 dark:text-white resize-none h-28 focus:border-teal-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><MessageCircle size={12} className="text-teal-500" /> Observações Comerciais</label>
+                    <textarea
+                      value={formData.briefing?.observacoesComerciais || ''}
+                      onChange={(e) => setFormData({ ...formData, briefing: { ...formData.briefing, observacoesComerciais: e.target.value } })}
+                      placeholder="Ex: decisores envolvidos, urgência, objeções, próximos passos e combinados."
+                      className="w-full px-6 py-5 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[32px] font-bold outline-none text-gray-900 dark:text-white resize-none h-28 focus:border-teal-500"
+                    />
                   </div>
                 </div>
               )}

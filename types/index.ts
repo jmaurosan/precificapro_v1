@@ -86,6 +86,13 @@ export interface Client {
     objetivo: string;
     estilo: string;
     prazo: string;
+    tipoProjeto?: string;
+    ambientes?: string[];
+    orcamentoEstimado?: string;
+    prioridade?: string;
+    doresAtuais?: string;
+    referencias?: string;
+    observacoesComerciais?: string;
   };
   documentos?: DocumentoCliente[];
 }
