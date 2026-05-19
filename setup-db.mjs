@@ -37,7 +37,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const TABLES = [
-  'profiles', 'clients', 'documents', 'projects', 'project_expenses',
+  'organizations', 'organization_members', 'profiles', 'clients', 'documents', 'projects', 'project_expenses',
   'custos_projeto', 'consignados', 'prestadores', 'suppliers',
   'contas_pagar', 'services', 'proposals', 'proposal_items',
   'recibos', 'schedule_events', 'inspections', 'non_conformities',
@@ -56,6 +56,9 @@ async function checkTables() {
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
         console.log(`❌ ${table} - NÃO EXISTE`);
         missing.push(table);
+      } else if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+        console.log(`✅ ${table} - EXISTE/PROTEGIDA (não exposta ao papel anon)`);
+        existing.push(table);
       } else if (error.code === 'PGRST301' || error.message?.includes('policy')) {
         console.log(`✅ ${table} - EXISTE (RLS ativo)`);
         existing.push(table);

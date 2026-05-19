@@ -75,6 +75,28 @@ const SettingsPage: React.FC = () => {
       if (data.pricing_config) setPricingConfig(data.pricing_config);
       if (data.notifications) setNotifications(data.notifications);
     }
+
+    if (user?.organization?.id) {
+      const { data: organization } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', user.organization.id)
+        .maybeSingle();
+
+      if (organization) {
+        setCompanyData((current) => ({
+          ...current,
+          name: organization.name || current.name,
+          cnpj: organization.document || current.cnpj,
+          email: organization.email || current.email,
+          phone: organization.phone || current.phone,
+          website: organization.website || current.website,
+          logo: organization.logo_url || current.logo,
+          address: organization.address || current.address,
+        }));
+        if (organization.pricing_config) setPricingConfig(organization.pricing_config);
+      }
+    }
     setLoading(false);
   };
 
@@ -97,10 +119,35 @@ const SettingsPage: React.FC = () => {
 
     if (error) {
       alert('Erro ao salvar: ' + error.message);
-    } else {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setLoading(false);
+      return;
     }
+
+    if (user?.organization?.id) {
+      const { error: organizationError } = await supabase
+        .from('organizations')
+        .update({
+          name: companyData.name,
+          document: companyData.cnpj,
+          email: companyData.email,
+          phone: companyData.phone,
+          website: companyData.website,
+          logo_url: companyData.logo,
+          address: companyData.address,
+          pricing_config: pricingConfig,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.organization.id);
+
+      if (organizationError) {
+        alert('Erro ao salvar escritório: ' + organizationError.message);
+        setLoading(false);
+        return;
+      }
+    }
+
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
     setLoading(false);
   };
 

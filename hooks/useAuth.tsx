@@ -1,7 +1,7 @@
 
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { User } from '../types';
+import { Organization, User } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -67,8 +67,55 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
+  const fetchOrganization = async (userId: string): Promise<Organization | undefined> => {
+    try {
+      const { data, error } = await supabase
+        .from('organization_members')
+        .select(`
+          role,
+          organizations (
+            id,
+            name,
+            slug,
+            plan,
+            status
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data?.organizations) {
+        if (error && error.code !== '42P01' && !error.message?.includes('organization_members')) {
+          console.warn('Organization context not available:', error.message);
+        }
+        return undefined;
+      }
+
+      const organization = Array.isArray(data.organizations)
+        ? data.organizations[0]
+        : data.organizations;
+
+      if (!organization) return undefined;
+
+      return {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug || undefined,
+        plan: organization.plan || 'solo',
+        status: organization.status || 'active',
+        role: data.role || 'member',
+      };
+    } catch (error) {
+      console.warn('Organization context failed:', error);
+      return undefined;
+    }
+  };
+
   const fetchProfile = async (userId: string, email: string, fallbackName?: string) => {
     try {
+      const organization = await fetchOrganization(userId);
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -83,8 +130,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email: email,
           name: profile.name || email.split('@')[0],
           role: profile.role || 'user',
-          company: profile.company_name || 'Individual',
-          createdAt: new Date(profile.created_at)
+          company: organization?.name || profile.company_name || 'Individual',
+          createdAt: new Date(profile.created_at),
+          organization,
         });
       } else {
         const profileName = fallbackName || email.split('@')[0];
@@ -100,8 +148,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             email: email,
             name: profileName,
             role: 'user',
-            company: 'Individual',
-            createdAt: new Date()
+            company: organization?.name || 'Individual',
+            createdAt: new Date(),
+            organization,
           });
         }
       }

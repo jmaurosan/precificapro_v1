@@ -16,6 +16,19 @@ export interface CompanyProfile {
   address: Endereco;
 }
 
+export type OrganizationRole = 'owner' | 'admin' | 'member' | 'financial' | 'viewer';
+export type OrganizationPlan = 'solo' | 'studio' | 'pro' | 'enterprise';
+export type OrganizationStatus = 'active' | 'trialing' | 'past_due' | 'suspended' | 'cancelled';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug?: string;
+  plan: OrganizationPlan;
+  status: OrganizationStatus;
+  role: OrganizationRole;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -24,6 +37,7 @@ export interface User {
   company: string;
   createdAt: Date;
   companyProfile?: CompanyProfile;
+  organization?: Organization;
 }
 
 export interface PricingConfiguration {
