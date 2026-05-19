@@ -1,11 +1,15 @@
 
 import {
   ChevronRight,
+  CheckCircle2,
   Hammer,
-  Plus, Search,
+  Plus,
+  Search,
+  Trash2,
   X
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
 
@@ -20,6 +24,8 @@ interface ProposalItem {
 
 interface Proposal {
   id: string;
+  clientId?: string;
+  projectId?: string;
   proposalNumber: string;
   proposalDate: string;
   client: string;
@@ -35,19 +41,66 @@ interface Proposal {
 
 const ProposalsPage: React.FC = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [projects, setProjects] = useState<{ id: string, name: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: string, name: string, clientId?: string, clientName?: string }[]>([]);
+  const [clients, setClients] = useState<{ id: string, nome: string, briefing?: any, imovel?: any }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFormModal, setShowFormModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchProposals();
       fetchProjects();
+      fetchClients();
     }
   }, [user]);
+
+  const generateProposalNumber = () => {
+    const year = new Date().getFullYear();
+    const next = String(proposals.length + 1).padStart(3, '0');
+    return `${year}-${next}`;
+  };
+
+  const getDefaultItemFromClient = (client?: any): ProposalItem[] => {
+    const tipoProjeto = client?.briefing?.tipoProjeto || client?.imovel?.tipo || 'Projeto de arquitetura/reforma';
+    const objetivo = client?.briefing?.objetivo ? ` - ${client.briefing.objetivo}` : '';
+
+    return [{
+      id: Date.now().toString(),
+      description: `${tipoProjeto}${objetivo}`.slice(0, 180),
+      unit: 'serv',
+      quantity: 1,
+      unitPrice: 0,
+      category: 'service'
+    }];
+  };
+
+  const resetForm = (client?: any) => {
+    setFormData({
+      proposalNumber: generateProposalNumber(),
+      proposalDate: new Date().toISOString().split('T')[0],
+      clientId: client?.id || '',
+      client: client?.nome || '',
+      projetoId: '',
+      status: 'sent',
+      notes: client?.briefing?.observacoesComerciais || '',
+      items: getDefaultItemFromClient(client)
+    });
+  };
+
+  useEffect(() => {
+    if (location.state && (location.state as any).createForClient) {
+      const client = (location.state as any).createForClient;
+      resetForm(client);
+      setShowFormModal(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, proposals.length]);
 
   const fetchProposals = async () => {
     setLoading(true);
@@ -55,7 +108,8 @@ const ProposalsPage: React.FC = () => {
       .from('proposals')
       .select(`
         *,
-        projects (name)
+        projects (name),
+        proposal_items (*)
       `)
       .order('created_at', { ascending: false });
 
@@ -64,34 +118,68 @@ const ProposalsPage: React.FC = () => {
     } else {
       setProposals((data || []).map(p => ({
         id: p.id,
+        clientId: p.client_id,
+        projectId: p.project_id,
         proposalNumber: p.proposal_number,
         proposalDate: p.proposal_date,
         client: p.client_name,
         company: user?.company || 'Individual',
-        projetoNome: p.projects?.name || 'Geral',
-        total: Number(p.total_amount),
+        projetoNome: p.projects?.name || p.project_name || 'Geral',
+        total: Number(p.total || 0),
         status: p.status as any,
         createdAt: p.created_at,
-        itemsCount: p.items?.length || 0,
-        items: p.items || []
+        itemsCount: p.proposal_items?.length || 0,
+        items: (p.proposal_items || []).map((item: any) => ({
+          id: item.id,
+          description: item.description,
+          unit: item.unit,
+          quantity: Number(item.quantity || 0),
+          unitPrice: Number(item.unit_price || 0),
+          category: item.category
+        })),
+        notes: p.observacoes
       })));
     }
     setLoading(false);
   };
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from('projects').select('id, name');
-    if (data) setProjects(data);
+    const { data } = await supabase.from('projects').select('id, name, client_id, client_name');
+    if (data) {
+      setProjects(data.map((project: any) => ({
+        id: project.id,
+        name: project.name,
+        clientId: project.client_id,
+        clientName: project.client_name
+      })));
+    }
+  };
+
+  const fetchClients = async () => {
+    const { data } = await supabase
+      .from('clients')
+      .select('id, nome, briefing, imovel')
+      .order('nome');
+    if (data) setClients(data);
   };
 
 
   const [formData, setFormData] = useState<any>({
     proposalNumber: '',
     proposalDate: new Date().toISOString().split('T')[0],
+    clientId: '',
     client: '',
     projetoId: '',
-    status: 'draft',
-    items: []
+    status: 'sent',
+    notes: '',
+    items: [{
+      id: '1',
+      description: '',
+      unit: 'serv',
+      quantity: 1,
+      unitPrice: 0,
+      category: 'service'
+    }]
   });
 
   // Função para abrir o visualizador de proposta digital
@@ -161,26 +249,145 @@ const ProposalsPage: React.FC = () => {
   const handleSaveProposal = async (e: React.FormEvent) => {
     e.preventDefault();
     const total = formData.items.reduce((acc: number, item: any) => acc + (item.quantity * item.unitPrice), 0);
+    const selectedProject = projects.find((project) => project.id === formData.projetoId);
 
     const payload = {
       user_id: user?.id,
       project_id: formData.projetoId || null,
+      client_id: formData.clientId || null,
       proposal_number: formData.proposalNumber,
       proposal_date: formData.proposalDate,
       client_name: formData.client,
-      total_amount: total,
+      company_name: user?.company || 'Individual',
+      project_name: selectedProject?.name || '',
+      total,
       status: formData.status,
-      items: formData.items
+      observacoes: formData.notes
     };
 
-    const { error } = await supabase.from('proposals').insert([payload]);
+    const { data: proposal, error } = await supabase.from('proposals').insert([payload]).select('id').single();
 
     if (error) {
       alert('Erro ao salvar proposta: ' + error.message);
     } else {
+      const itemsPayload = formData.items
+        .filter((item: any) => item.description)
+        .map((item: any) => ({
+          proposal_id: proposal.id,
+          description: item.description,
+          unit: item.unit || 'serv',
+          quantity: Number(item.quantity) || 1,
+          unit_price: Number(item.unitPrice) || 0,
+          category: item.category || 'service'
+        }));
+
+      if (itemsPayload.length) {
+        const { error: itemsError } = await supabase.from('proposal_items').insert(itemsPayload);
+        if (itemsError) {
+          alert('Proposta criada, mas houve erro ao salvar itens: ' + itemsError.message);
+        }
+      }
+
+      if (formData.clientId) {
+        await supabase
+          .from('clients')
+          .update({ status: 'proposta_enviada' })
+          .eq('id', formData.clientId);
+      }
+
       await fetchProposals();
       setShowFormModal(false);
+      setMessage({ text: 'Proposta criada e lead movido para Proposta enviada.', type: 'success' });
+      setTimeout(() => setMessage(null), 3500);
     }
+  };
+
+  const handleOpenNewProposal = () => {
+    resetForm();
+    setShowFormModal(true);
+  };
+
+  const handleAddItem = () => {
+    setFormData({
+      ...formData,
+      items: [
+        ...formData.items,
+        {
+          id: Date.now().toString(),
+          description: '',
+          unit: 'serv',
+          quantity: 1,
+          unitPrice: 0,
+          category: 'service'
+        }
+      ]
+    });
+  };
+
+  const handleUpdateItem = (itemId: string, field: string, value: any) => {
+    setFormData({
+      ...formData,
+      items: formData.items.map((item: any) => item.id === itemId ? { ...item, [field]: value } : item)
+    });
+  };
+
+  const handleRemoveItem = (itemId: string) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((item: any) => item.id !== itemId)
+    });
+  };
+
+  const handleApproveAndCreateProject = async (proposal: Proposal, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (proposal.status === 'approved' && proposal.projectId) {
+      navigate('/projects');
+      return;
+    }
+
+    let projectId = proposal.projectId;
+
+    if (!projectId) {
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .insert([{
+          user_id: user?.id,
+          name: proposal.projetoNome !== 'Geral' ? proposal.projetoNome : `Obra - ${proposal.client}`,
+          client_id: proposal.clientId || null,
+          client_name: proposal.client,
+          total_budget: proposal.total,
+          spent_amount: 0,
+          start_date: new Date().toISOString().split('T')[0],
+          status: 'active'
+        }])
+        .select('id')
+        .single();
+
+      if (projectError) {
+        setMessage({ text: 'Erro ao criar obra a partir da proposta: ' + projectError.message, type: 'error' });
+        setTimeout(() => setMessage(null), 4500);
+        return;
+      }
+
+      projectId = project.id;
+    }
+
+    await supabase
+      .from('proposals')
+      .update({ status: 'approved', project_id: projectId })
+      .eq('id', proposal.id);
+
+    if (proposal.clientId) {
+      await supabase
+        .from('clients')
+        .update({ status: 'contratado' })
+        .eq('id', proposal.clientId);
+    }
+
+    await fetchProposals();
+    setMessage({ text: 'Proposta aprovada e obra criada com sucesso.', type: 'success' });
+    setTimeout(() => setMessage(null), 3500);
   };
 
   const filteredProposals = proposals.filter(p =>
@@ -196,7 +403,7 @@ const ProposalsPage: React.FC = () => {
           <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">Orçamentos detalhados vinculados a cada frente de trabalho.</p>
         </div>
         <button
-          onClick={() => setShowFormModal(true)}
+          onClick={handleOpenNewProposal}
           className="flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-teal-600/20 transition-all active:scale-95"
         >
           <Plus size={20} />
@@ -214,6 +421,16 @@ const ProposalsPage: React.FC = () => {
           className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl focus:outline-none focus:ring-4 focus:ring-teal-500/10 text-gray-900 dark:text-white font-bold shadow-sm"
         />
       </div>
+
+      {message && (
+        <div className={`p-4 rounded-2xl font-bold text-sm flex items-center gap-3 ${message.type === 'success'
+          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800'
+          : 'bg-rose-50 text-rose-700 border border-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800'
+          }`}>
+          {message.type === 'success' ? <CheckCircle2 size={18} /> : <X size={18} />}
+          {message.text}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProposals.map((p) => (
@@ -252,6 +469,12 @@ const ProposalsPage: React.FC = () => {
                 <ChevronRight size={20} />
               </button>
             </div>
+            <button
+              onClick={(e) => handleApproveAndCreateProject(p, e)}
+              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 size={16} /> {p.status === 'approved' ? 'Abrir Obra' : 'Aprovar e Virar Obra'}
+            </button>
           </div>
         ))}
       </div>
@@ -267,10 +490,31 @@ const ProposalsPage: React.FC = () => {
               <form id="proposal-form" onSubmit={handleSaveProposal} className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest">1. Vincular à Obra / Projeto</label>
-                  <select required value={formData.projetoId} onChange={(e) => setFormData({ ...formData, projetoId: e.target.value })} className="w-full px-5 py-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800 rounded-2xl font-black text-teal-600 dark:text-teal-400 outline-none">
+                  <select value={formData.projetoId} onChange={(e) => setFormData({ ...formData, projetoId: e.target.value })} className="w-full px-5 py-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800 rounded-2xl font-black text-teal-600 dark:text-teal-400 outline-none">
                     <option value="">Geral / Sem vínculo</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest">2. Cliente / Lead</label>
+                  <select
+                    value={formData.clientId}
+                    onChange={(e) => {
+                      const selectedClient = clients.find((client) => client.id === e.target.value);
+                      setFormData({
+                        ...formData,
+                        clientId: selectedClient?.id || '',
+                        client: selectedClient?.nome || '',
+                        items: selectedClient ? getDefaultItemFromClient(selectedClient) : formData.items
+                      });
+                    }}
+                    className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold"
+                  >
+                    <option value="">Selecionar cliente cadastrado</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>{client.nome}</option>
                     ))}
                   </select>
                 </div>
@@ -284,10 +528,81 @@ const ProposalsPage: React.FC = () => {
                     <input type="text" required value={formData.client} onChange={(e) => setFormData({ ...formData, client: e.target.value })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold" />
                   </div>
                 </div>
-                <div className="p-8 bg-blue-50 dark:bg-blue-900/10 rounded-[32px] border border-blue-100 dark:border-blue-800">
-                  <p className="text-sm font-bold text-blue-700 dark:text-blue-300 italic text-center">
-                    Ao aprovar esta proposta, o valor total será somado ao orçamento disponível da obra vinculada.
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Data</label>
+                    <input type="date" required value={formData.proposalDate} onChange={(e) => setFormData({ ...formData, proposalDate: e.target.value })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</label>
+                    <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold">
+                      <option value="draft">Rascunho</option>
+                      <option value="sent">Enviada</option>
+                      <option value="approved">Aprovada</option>
+                      <option value="rejected">Rejeitada</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Itens da Proposta</label>
+                    <button type="button" onClick={handleAddItem} className="px-4 py-2 bg-teal-50 dark:bg-teal-900/20 text-teal-600 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                      + Item
+                    </button>
+                  </div>
+                  {formData.items.map((item: any) => (
+                    <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800">
+                      <input
+                        type="text"
+                        required
+                        value={item.description}
+                        onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)}
+                        className="md:col-span-6 px-4 py-3 bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-xl font-bold"
+                        placeholder="Descrição do serviço"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.quantity}
+                        onChange={(e) => handleUpdateItem(item.id, 'quantity', Number(e.target.value))}
+                        className="md:col-span-2 px-4 py-3 bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-xl font-bold"
+                        placeholder="Qtd."
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.unitPrice}
+                        onChange={(e) => handleUpdateItem(item.id, 'unitPrice', Number(e.target.value))}
+                        className="md:col-span-3 px-4 py-3 bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-xl font-bold"
+                        placeholder="Valor unit."
+                      />
+                      <button type="button" onClick={() => handleRemoveItem(item.id)} className="md:col-span-1 p-3 text-gray-300 hover:text-rose-500">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Observações</label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold resize-none h-28"
+                    placeholder="Condições comerciais, escopo, próximos passos..."
+                  />
+                </div>
+
+                <div className="p-8 bg-blue-50 dark:bg-blue-900/10 rounded-[32px] border border-blue-100 dark:border-blue-800 flex items-center justify-between gap-6">
+                  <p className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                    Ao aprovar, a proposta pode virar obra com orçamento inicial já preenchido.
                   </p>
+                  <span className="text-2xl font-black text-blue-700 dark:text-blue-300 whitespace-nowrap">
+                    R$ {formData.items.reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.unitPrice)), 0).toLocaleString('pt-BR')}
+                  </span>
                 </div>
               </form>
             </div>

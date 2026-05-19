@@ -752,12 +752,20 @@ const ClientsPage: React.FC = () => {
                 </button>
               </div>
               <div className="mt-6 pt-6 border-t border-gray-50 dark:border-gray-800">
-                <button
-                  onClick={(e) => { e.stopPropagation(); navigate('/projects', { state: { createForClient: client } }); }}
-                  className="w-full py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-teal-200 dark:shadow-none flex items-center justify-center gap-2 group/btn"
-                >
-                  <Hammer size={14} className="group-hover/btn:rotate-12 transition-transform" /> Iniciar Obra
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate('/proposals', { state: { createForClient: client } }); }}
+                    className="py-3 px-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-violet-200 dark:shadow-none flex items-center justify-center gap-2"
+                  >
+                    <FileText size={14} /> Proposta
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate('/projects', { state: { createForClient: client } }); }}
+                    className="py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-teal-200 dark:shadow-none flex items-center justify-center gap-2 group/btn"
+                  >
+                    <Hammer size={14} className="group-hover/btn:rotate-12 transition-transform" /> Obra
+                  </button>
+                </div>
               </div>
               <div className="p-5 bg-gray-50 dark:bg-gray-800/40 rounded-[24px] space-y-3">
                 <div className="flex items-center justify-between">
