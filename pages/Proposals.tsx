@@ -265,7 +265,8 @@ const ProposalsPage: React.FC = () => {
     notes: formData.notes || '',
     paymentTerms: formData.paymentTerms || '',
     deliveryTerms: formData.deliveryTerms || '',
-    validityDays: Number(formData.validityDays || 15)
+    validityDays: Number(formData.validityDays || 15),
+    isDemo: Boolean(formData.isDemo)
   });
 
   const escapeHtml = (value?: string | number | null) => String(value ?? '')
@@ -610,6 +611,122 @@ const ProposalsPage: React.FC = () => {
     setTimeout(() => setMessage(null), 3500);
   };
 
+  const handleCreateDemoProposal = async () => {
+    if (!user?.id) return;
+
+    const demoNumber = `DEMO-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+    const demoNotes = JSON.stringify({
+      notes: 'Proposta demonstrativa criada para visualizar o modelo apresentável. Pode ser removida pelo botão Limpar demos.',
+      paymentTerms: '30% na aprovação, 40% na apresentação do anteprojeto e 30% na entrega final dos documentos.',
+      deliveryTerms: 'Prazo estimado de 45 dias após aprovação da proposta, recebimento das medidas e validação do briefing.',
+      validityDays: 15,
+      isDemo: true
+    });
+
+    const { data: proposal, error } = await supabase
+      .from('proposals')
+      .insert([{
+        user_id: user.id,
+        proposal_number: demoNumber,
+        proposal_date: new Date().toISOString().split('T')[0],
+        client_name: 'Cliente Demonstração',
+        company_name: officeProfile?.name || user.company || 'PrecificaPro',
+        project_name: 'Reforma Apartamento 82m²',
+        total: 28500,
+        status: 'sent',
+        observacoes: demoNotes
+      }])
+      .select('id')
+      .single();
+
+    if (error) {
+      setMessage({ text: 'Erro ao criar proposta demo: ' + error.message, type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    const { error: itemsError } = await supabase.from('proposal_items').insert([
+      {
+        proposal_id: proposal.id,
+        description: 'Briefing, levantamento de necessidades e estudo preliminar',
+        unit: 'etapa',
+        quantity: 1,
+        unit_price: 4500,
+        category: 'service'
+      },
+      {
+        proposal_id: proposal.id,
+        description: 'Projeto executivo de interiores com detalhamentos técnicos',
+        unit: 'etapa',
+        quantity: 1,
+        unit_price: 14500,
+        category: 'service'
+      },
+      {
+        proposal_id: proposal.id,
+        description: 'Compatibilização, memorial descritivo e apoio à contratação',
+        unit: 'etapa',
+        quantity: 1,
+        unit_price: 6500,
+        category: 'service'
+      },
+      {
+        proposal_id: proposal.id,
+        description: 'Acompanhamento técnico inicial da obra',
+        unit: 'visita',
+        quantity: 3,
+        unit_price: 1000,
+        category: 'service'
+      }
+    ]);
+
+    if (itemsError) {
+      setMessage({ text: 'Proposta demo criada, mas houve erro nos itens: ' + itemsError.message, type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    await fetchProposals();
+    setMessage({ text: 'Proposta demo criada. Clique no card para visualizar o PDF apresentável.', type: 'success' });
+    setTimeout(() => setMessage(null), 4500);
+  };
+
+  const handleClearDemoProposals = async () => {
+    if (!user?.id) return;
+
+    const { data: demoProposals, error } = await supabase
+      .from('proposals')
+      .select('id')
+      .eq('user_id', user.id)
+      .ilike('observacoes', '%"isDemo":true%');
+
+    if (error) {
+      setMessage({ text: 'Erro ao buscar demos: ' + error.message, type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    const ids = (demoProposals || []).map((proposal: any) => proposal.id);
+    if (!ids.length) {
+      setMessage({ text: 'Nenhuma proposta demo para remover.', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
+    await supabase.from('proposal_items').delete().in('proposal_id', ids);
+    const { error: deleteError } = await supabase.from('proposals').delete().in('id', ids);
+
+    if (deleteError) {
+      setMessage({ text: 'Erro ao limpar demos: ' + deleteError.message, type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    await fetchProposals();
+    setMessage({ text: `${ids.length} proposta(s) demo removida(s).`, type: 'success' });
+    setTimeout(() => setMessage(null), 3500);
+  };
+
   const filteredProposals = proposals.filter(p =>
     p.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.projetoNome.toLowerCase().includes(searchTerm.toLowerCase())
@@ -622,13 +739,29 @@ const ProposalsPage: React.FC = () => {
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Propostas Comerciais</h1>
           <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">Orçamentos detalhados vinculados a cada frente de trabalho.</p>
         </div>
-        <button
-          onClick={handleOpenNewProposal}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-teal-600/20 transition-all active:scale-95"
-        >
-          <Plus size={20} />
-          <span>Nova Proposta</span>
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={handleCreateDemoProposal}
+            className="flex items-center justify-center gap-2 px-5 py-3.5 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl font-bold shadow-lg shadow-violet-600/20 transition-all active:scale-95"
+          >
+            <Plus size={18} />
+            <span>Demo</span>
+          </button>
+          <button
+            onClick={handleClearDemoProposals}
+            className="flex items-center justify-center gap-2 px-5 py-3.5 bg-white dark:bg-gray-900 text-rose-500 border border-rose-100 dark:border-rose-900/40 rounded-2xl font-bold hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-95"
+          >
+            <Trash2 size={18} />
+            <span>Limpar demos</span>
+          </button>
+          <button
+            onClick={handleOpenNewProposal}
+            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-teal-600/20 transition-all active:scale-95"
+          >
+            <Plus size={20} />
+            <span>Nova Proposta</span>
+          </button>
+        </div>
       </div>
 
       <div className="relative">
