@@ -37,6 +37,19 @@ interface Proposal {
   itemsCount: number;
   items: ProposalItem[];
   notes?: string;
+  paymentTerms?: string;
+  deliveryTerms?: string;
+  validityDays?: number;
+}
+
+interface OfficeProfile {
+  name: string;
+  cnpj?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  logo?: string | null;
+  address?: any;
 }
 
 const ProposalsPage: React.FC = () => {
@@ -51,12 +64,14 @@ const ProposalsPage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [officeProfile, setOfficeProfile] = useState<OfficeProfile | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchProposals();
       fetchProjects();
       fetchClients();
+      fetchOfficeProfile();
     }
   }, [user]);
 
@@ -89,6 +104,9 @@ const ProposalsPage: React.FC = () => {
       projetoId: '',
       status: 'sent',
       notes: client?.briefing?.observacoesComerciais || '',
+      paymentTerms: '40% na aprovação da proposta, 40% no desenvolvimento e 20% na entrega final.',
+      deliveryTerms: 'Prazos detalhados serão confirmados após alinhamento técnico, aprovação do escopo e disponibilidade das informações do cliente.',
+      validityDays: 15,
       items: getDefaultItemFromClient(client)
     });
   };
@@ -137,7 +155,7 @@ const ProposalsPage: React.FC = () => {
           unitPrice: Number(item.unit_price || 0),
           category: item.category
         })),
-        notes: p.observacoes
+        ...parseProposalNotes(p.observacoes)
       })));
     }
     setLoading(false);
@@ -163,6 +181,36 @@ const ProposalsPage: React.FC = () => {
     if (data) setClients(data);
   };
 
+  const fetchOfficeProfile = async () => {
+    if (!user?.id) return;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('company_name, cnpj, phone, website, avatar_url, address, email')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    let organization: any = null;
+    if (user.organization?.id) {
+      const { data } = await supabase
+        .from('organizations')
+        .select('name, document, email, phone, website, logo_url, address')
+        .eq('id', user.organization.id)
+        .maybeSingle();
+      organization = data;
+    }
+
+    setOfficeProfile({
+      name: organization?.name || profile?.company_name || user.company || 'Seu Escritório',
+      cnpj: organization?.document || profile?.cnpj || '',
+      email: organization?.email || profile?.email || user.email,
+      phone: organization?.phone || profile?.phone || '',
+      website: organization?.website || profile?.website || '',
+      logo: organization?.logo_url || profile?.avatar_url || null,
+      address: organization?.address || profile?.address || {}
+    });
+  };
+
 
   const [formData, setFormData] = useState<any>({
     proposalNumber: '',
@@ -172,6 +220,9 @@ const ProposalsPage: React.FC = () => {
     projetoId: '',
     status: 'sent',
     notes: '',
+    paymentTerms: '40% na aprovação da proposta, 40% no desenvolvimento e 20% na entrega final.',
+    deliveryTerms: 'Prazos detalhados serão confirmados após alinhamento técnico, aprovação do escopo e disponibilidade das informações do cliente.',
+    validityDays: 15,
     items: [{
       id: '1',
       description: '',
@@ -182,70 +233,239 @@ const ProposalsPage: React.FC = () => {
     }]
   });
 
+  const parseProposalNotes = (rawNotes?: string | null) => {
+    if (!rawNotes) {
+      return {
+        notes: '',
+        paymentTerms: '40% na aprovação da proposta, 40% no desenvolvimento e 20% na entrega final.',
+        deliveryTerms: 'Prazos detalhados serão confirmados após alinhamento técnico, aprovação do escopo e disponibilidade das informações do cliente.',
+        validityDays: 15
+      };
+    }
+
+    try {
+      const parsed = JSON.parse(rawNotes);
+      return {
+        notes: parsed.notes || '',
+        paymentTerms: parsed.paymentTerms || '40% na aprovação da proposta, 40% no desenvolvimento e 20% na entrega final.',
+        deliveryTerms: parsed.deliveryTerms || 'Prazos detalhados serão confirmados após alinhamento técnico, aprovação do escopo e disponibilidade das informações do cliente.',
+        validityDays: Number(parsed.validityDays || 15)
+      };
+    } catch {
+      return {
+        notes: rawNotes,
+        paymentTerms: '40% na aprovação da proposta, 40% no desenvolvimento e 20% na entrega final.',
+        deliveryTerms: 'Prazos detalhados serão confirmados após alinhamento técnico, aprovação do escopo e disponibilidade das informações do cliente.',
+        validityDays: 15
+      };
+    }
+  };
+
+  const buildProposalNotes = () => JSON.stringify({
+    notes: formData.notes || '',
+    paymentTerms: formData.paymentTerms || '',
+    deliveryTerms: formData.deliveryTerms || '',
+    validityDays: Number(formData.validityDays || 15)
+  });
+
+  const escapeHtml = (value?: string | number | null) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  const formatCurrency = (value: number) => value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+
+  const formatDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR');
+
+  const getOfficeAddress = () => {
+    const address = officeProfile?.address || {};
+    return [address.logradouro, address.numero, address.bairro, address.cidade, address.uf]
+      .filter(Boolean)
+      .join(', ');
+  };
+
   // Função para abrir o visualizador de proposta digital
   const handleViewProposal = (proposal: Proposal) => {
     const win = window.open('', '_blank');
     if (win) {
+      const subtotal = proposal.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
+      const validUntil = new Date(`${proposal.proposalDate}T00:00:00`);
+      validUntil.setDate(validUntil.getDate() + (proposal.validityDays || 15));
+      const officeAddress = getOfficeAddress();
+      const statusLabel = {
+        approved: 'Aprovada',
+        draft: 'Rascunho',
+        sent: 'Enviada',
+        rejected: 'Rejeitada'
+      }[proposal.status];
+
       win.document.write(`
         <html>
           <head>
             <title>Proposta Comercial - ${proposal.proposalNumber}</title>
             <style>
-              body { font-family: sans-serif; padding: 40px; color: #333; }
-              .header { border-bottom: 2px solid #3b66f5; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; }
-              .details { margin-bottom: 40px; line-height: 1.6; }
-              .item-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              .item-table th { background: #f5f7ff; text-align: left; padding: 12px; font-size: 12px; text-transform: uppercase; }
-              .item-table td { padding: 12px; border-bottom: 1px solid #eee; }
-              .total { text-align: right; margin-top: 30px; font-size: 20px; font-weight: bold; color: #3b66f5; }
-              @media print { .no-print { display: none; } }
+              * { box-sizing: border-box; }
+              body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+              .toolbar { position: sticky; top: 0; z-index: 5; display: flex; justify-content: center; gap: 12px; padding: 14px; background: rgba(17,24,39,.92); backdrop-filter: blur(8px); }
+              .toolbar button { border: 0; border-radius: 999px; padding: 12px 22px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; }
+              .page { width: 210mm; min-height: 297mm; margin: 24px auto; background: white; box-shadow: 0 24px 80px rgba(15,23,42,.24); overflow: hidden; }
+              .hero { background: linear-gradient(135deg, #0f172a 0%, #0f766e 100%); color: white; padding: 34px 42px 30px; }
+              .brand { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; }
+              .logoBox { width: 76px; height: 76px; border-radius: 20px; background: rgba(255,255,255,.14); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 28px; font-weight: 900; }
+              .logoBox img { max-width: 100%; max-height: 100%; object-fit: contain; padding: 8px; }
+              .office h1 { margin: 0 0 8px; font-size: 25px; letter-spacing: .2px; }
+              .office p, .meta p { margin: 3px 0; color: rgba(255,255,255,.78); font-size: 12px; line-height: 1.45; }
+              .title { margin-top: 38px; display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; }
+              .title h2 { margin: 0; font-size: 42px; line-height: .98; letter-spacing: -1px; }
+              .badge { display: inline-block; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.14); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .9px; }
+              .content { padding: 36px 42px 42px; }
+              .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 18px; margin-bottom: 28px; }
+              .card { border: 1px solid #e5e7eb; border-radius: 18px; padding: 20px; background: #f8fafc; }
+              .label { margin: 0 0 8px; color: #0f766e; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.4px; }
+              .value { margin: 0; color: #111827; font-size: 18px; font-weight: 900; }
+              .muted { color: #64748b; font-size: 12px; line-height: 1.55; }
+              .section { margin-top: 30px; }
+              .section h3 { margin: 0 0 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 1.4px; color: #0f766e; }
+              table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 16px; border-style: hidden; box-shadow: 0 0 0 1px #e5e7eb; }
+              th { padding: 13px 14px; text-align: left; color: #475569; background: #f1f5f9; font-size: 10px; text-transform: uppercase; letter-spacing: .9px; }
+              td { padding: 15px 14px; border-top: 1px solid #e5e7eb; font-size: 12px; vertical-align: top; }
+              td strong { font-size: 13px; color: #111827; }
+              .right { text-align: right; }
+              .center { text-align: center; }
+              .summary { margin-top: 22px; margin-left: auto; width: 300px; border: 1px solid #e5e7eb; border-radius: 18px; overflow: hidden; }
+              .summaryRow { display: flex; justify-content: space-between; gap: 16px; padding: 13px 16px; font-size: 12px; }
+              .summaryTotal { background: #0f766e; color: white; font-size: 18px; font-weight: 900; }
+              .terms { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+              .note { white-space: pre-wrap; }
+              .signature { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; margin-top: 54px; }
+              .line { border-top: 1px solid #94a3b8; padding-top: 10px; color: #475569; font-size: 12px; text-align: center; }
+              .footer { margin-top: 34px; padding-top: 18px; border-top: 1px solid #e5e7eb; color: #94a3b8; font-size: 10px; text-align: center; }
+              @page { size: A4; margin: 0; }
+              @media print {
+                body { background: white; }
+                .toolbar { display: none; }
+                .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+              }
             </style>
           </head>
           <body>
-            <div class="no-print" style="background: #f5f7ff; padding: 10px; margin-bottom: 20px; border-radius: 8px; text-align: center;">
-              <button onclick="window.print()" style="padding: 10px 20px; background: #3b66f5; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Imprimir Proposta / PDF</button>
+            <div class="toolbar">
+              <button onclick="window.print()">Imprimir / Salvar PDF</button>
             </div>
-            <div class="header">
-              <div>
-                <h1 style="margin:0; color:#3b66f5;">PROPOSTA COMERCIAL</h1>
-                <p>Nº ${proposal.proposalNumber}</p>
-              </div>
-              <div style="text-align:right">
-                <p><strong>Emissão:</strong> ${new Date(proposal.proposalDate).toLocaleDateString('pt-BR')}</p>
-              </div>
-            </div>
-            <div class="details">
-              <p><strong>Cliente:</strong> ${proposal.client}</p>
-              <p><strong>Projeto Relacionado:</strong> ${proposal.projetoNome}</p>
-            </div>
-            <table class="item-table">
-              <thead>
-                <tr>
-                  <th>Descrição do Serviço / Equipamento</th>
-                  <th>Quant.</th>
-                  <th>Unitário</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${proposal.items.map(item => `
-                  <tr>
-                    <td>${item.description}</td>
-                    <td>${item.quantity}</td>
-                    <td>R$ ${item.unitPrice.toLocaleString('pt-BR')}</td>
-                    <td>R$ ${(item.quantity * item.unitPrice).toLocaleString('pt-BR')}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-            <div class="total">Total da Proposta: R$ ${proposal.total.toLocaleString('pt-BR')}</div>
+            <main class="page">
+              <section class="hero">
+                <div class="brand">
+                  <div style="display:flex; gap:18px; align-items:flex-start;">
+                    <div class="logoBox">
+                      ${officeProfile?.logo ? `<img src="${escapeHtml(officeProfile.logo)}" />` : escapeHtml((officeProfile?.name || proposal.company || 'P').charAt(0))}
+                    </div>
+                    <div class="office">
+                      <h1>${escapeHtml(officeProfile?.name || proposal.company || 'Seu Escritório')}</h1>
+                      <p>${escapeHtml(officeAddress || 'Endereço não informado')}</p>
+                      <p>${escapeHtml(officeProfile?.email || '')}${officeProfile?.phone ? ` • ${escapeHtml(officeProfile.phone)}` : ''}</p>
+                      <p>${officeProfile?.cnpj ? `CNPJ/Registro: ${escapeHtml(officeProfile.cnpj)}` : ''}${officeProfile?.website ? ` • ${escapeHtml(officeProfile.website)}` : ''}</p>
+                    </div>
+                  </div>
+                  <div class="meta" style="text-align:right;">
+                    <span class="badge">${escapeHtml(statusLabel)}</span>
+                    <p style="margin-top:14px;">Proposta Nº <strong>${escapeHtml(proposal.proposalNumber)}</strong></p>
+                    <p>Emissão: ${escapeHtml(formatDate(proposal.proposalDate))}</p>
+                    <p>Validade: ${escapeHtml(validUntil.toLocaleDateString('pt-BR'))}</p>
+                  </div>
+                </div>
+                <div class="title">
+                  <h2>Proposta<br/>Comercial</h2>
+                  <p style="max-width:310px;color:rgba(255,255,255,.78);line-height:1.5;font-size:13px;">Escopo, investimento e condições comerciais para execução dos serviços descritos nesta proposta.</p>
+                </div>
+              </section>
+
+              <section class="content">
+                <div class="grid">
+                  <div class="card">
+                    <p class="label">Cliente</p>
+                    <p class="value">${escapeHtml(proposal.client)}</p>
+                    <p class="muted">Projeto relacionado: ${escapeHtml(proposal.projetoNome || 'Geral')}</p>
+                  </div>
+                  <div class="card">
+                    <p class="label">Investimento Total</p>
+                    <p class="value">${escapeHtml(formatCurrency(proposal.total))}</p>
+                    <p class="muted">${proposal.items.length} item(ns) de escopo comercial</p>
+                  </div>
+                </div>
+
+                <div class="section">
+                  <h3>Escopo e Itens</h3>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Descrição</th>
+                        <th class="center">Un.</th>
+                        <th class="center">Qtd.</th>
+                        <th class="right">Unitário</th>
+                        <th class="right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${proposal.items.map(item => `
+                        <tr>
+                          <td><strong>${escapeHtml(item.description)}</strong><br/><span class="muted">${item.category === 'service' ? 'Serviço técnico' : 'Produto/material'}</span></td>
+                          <td class="center">${escapeHtml(item.unit || 'un')}</td>
+                          <td class="center">${escapeHtml(item.quantity)}</td>
+                          <td class="right">${escapeHtml(formatCurrency(item.unitPrice))}</td>
+                          <td class="right"><strong>${escapeHtml(formatCurrency(item.quantity * item.unitPrice))}</strong></td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+
+                  <div class="summary">
+                    <div class="summaryRow"><span>Subtotal</span><strong>${escapeHtml(formatCurrency(subtotal))}</strong></div>
+                    <div class="summaryRow"><span>Descontos/Taxas</span><strong>${escapeHtml(formatCurrency(proposal.total - subtotal))}</strong></div>
+                    <div class="summaryRow summaryTotal"><span>Total</span><span>${escapeHtml(formatCurrency(proposal.total))}</span></div>
+                  </div>
+                </div>
+
+                <div class="section terms">
+                  <div class="card">
+                    <p class="label">Condições de Pagamento</p>
+                    <p class="muted note">${escapeHtml(proposal.paymentTerms || 'A combinar.')}</p>
+                  </div>
+                  <div class="card">
+                    <p class="label">Prazos e Premissas</p>
+                    <p class="muted note">${escapeHtml(proposal.deliveryTerms || 'Prazos sujeitos à aprovação do escopo e disponibilidade de informações.')}</p>
+                  </div>
+                </div>
+
+                ${proposal.notes ? `
+                  <div class="section">
+                    <div class="card">
+                      <p class="label">Observações Comerciais</p>
+                      <p class="muted note">${escapeHtml(proposal.notes)}</p>
+                    </div>
+                  </div>
+                ` : ''}
+
+                <div class="signature">
+                  <div class="line">${escapeHtml(officeProfile?.name || proposal.company || 'Escritório')}</div>
+                  <div class="line">${escapeHtml(proposal.client)}</div>
+                </div>
+
+                <div class="footer">
+                  Esta proposta é válida até ${escapeHtml(validUntil.toLocaleDateString('pt-BR'))}. Alterações de escopo, materiais, prazos ou condições de execução podem gerar revisão de valores.
+                </div>
+              </section>
+            </main>
           </body>
         </html>
       `);
       win.document.close();
     }
   };
-
   const handleSaveProposal = async (e: React.FormEvent) => {
     e.preventDefault();
     const total = formData.items.reduce((acc: number, item: any) => acc + (item.quantity * item.unitPrice), 0);
@@ -262,7 +482,7 @@ const ProposalsPage: React.FC = () => {
       project_name: selectedProject?.name || '',
       total,
       status: formData.status,
-      observacoes: formData.notes
+      observacoes: buildProposalNotes()
     };
 
     const { data: proposal, error } = await supabase.from('proposals').insert([payload]).select('id').single();
@@ -593,6 +813,36 @@ const ProposalsPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold resize-none h-28"
                     placeholder="Condições comerciais, escopo, próximos passos..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Condições de Pagamento</label>
+                    <textarea
+                      value={formData.paymentTerms}
+                      onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
+                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold resize-none h-28"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Prazos e Premissas</label>
+                    <textarea
+                      value={formData.deliveryTerms}
+                      onChange={(e) => setFormData({ ...formData, deliveryTerms: e.target.value })}
+                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold resize-none h-28"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Validade da Proposta (dias)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.validityDays}
+                    onChange={(e) => setFormData({ ...formData, validityDays: Number(e.target.value) || 15 })}
+                    className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl font-bold"
                   />
                 </div>
 
