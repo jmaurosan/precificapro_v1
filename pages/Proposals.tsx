@@ -52,6 +52,78 @@ interface OfficeProfile {
   address?: any;
 }
 
+const proposalTemplates = [
+  {
+    id: 'reforma_residencial',
+    label: 'Reforma residencial',
+    description: 'Escopo completo para apartamento ou casa com projeto, detalhamento e apoio técnico.',
+    paymentTerms: '30% na aprovação da proposta, 40% na entrega do anteprojeto e 30% na entrega do projeto executivo.',
+    deliveryTerms: 'Prazo estimado de 45 a 60 dias após aprovação da proposta, levantamento de medidas e recebimento das referências do cliente.',
+    notes: 'Inclui desenvolvimento do conceito, organização do escopo, detalhamentos técnicos e apoio inicial para contratação de fornecedores.',
+    items: [
+      { description: 'Briefing, levantamento técnico e programa de necessidades', unit: 'etapa', quantity: 1, unitPrice: 3500, category: 'service' },
+      { description: 'Anteprojeto de reforma com layout, conceito e diretrizes de materiais', unit: 'etapa', quantity: 1, unitPrice: 7800, category: 'service' },
+      { description: 'Projeto executivo com detalhamento de marcenaria, pontos e acabamentos', unit: 'etapa', quantity: 1, unitPrice: 12500, category: 'service' },
+      { description: 'Memorial descritivo e apoio para orçamento com fornecedores', unit: 'etapa', quantity: 1, unitPrice: 4200, category: 'service' }
+    ]
+  },
+  {
+    id: 'interiores',
+    label: 'Projeto de interiores',
+    description: 'Ideal para ambientação, mobiliário, iluminação e acabamento sem obra pesada.',
+    paymentTerms: '40% na aprovação, 30% na apresentação do conceito e 30% na entrega final.',
+    deliveryTerms: 'Prazo estimado de 30 a 45 dias, condicionado à aprovação das etapas pelo cliente.',
+    notes: 'Focado em layout, estética, especificação de acabamentos, mobiliário, iluminação decorativa e lista de compras.',
+    items: [
+      { description: 'Conceito visual, moodboard e estudo de referências', unit: 'etapa', quantity: 1, unitPrice: 2800, category: 'service' },
+      { description: 'Layout humanizado e estudo de mobiliário dos ambientes', unit: 'ambiente', quantity: 3, unitPrice: 1800, category: 'service' },
+      { description: 'Especificação de acabamentos, iluminação e peças decorativas', unit: 'etapa', quantity: 1, unitPrice: 3600, category: 'service' },
+      { description: 'Lista de compras e caderno final de apresentação', unit: 'etapa', quantity: 1, unitPrice: 2400, category: 'service' }
+    ]
+  },
+  {
+    id: 'consultoria',
+    label: 'Consultoria técnica',
+    description: 'Atendimento rápido para orientar decisão, compra, reforma ou viabilidade.',
+    paymentTerms: '100% na aprovação da consultoria para bloqueio da agenda.',
+    deliveryTerms: 'Consultoria realizada em até 7 dias úteis conforme agenda. Relatório entregue em até 3 dias úteis após a visita/reunião.',
+    notes: 'Inclui reunião, análise técnica, recomendações práticas e relatório objetivo com próximos passos.',
+    items: [
+      { description: 'Reunião de diagnóstico e análise das necessidades', unit: 'hora', quantity: 2, unitPrice: 450, category: 'service' },
+      { description: 'Visita técnica ou análise remota documentada', unit: 'visita', quantity: 1, unitPrice: 1200, category: 'service' },
+      { description: 'Relatório de recomendações e próximos passos', unit: 'relatório', quantity: 1, unitPrice: 900, category: 'service' }
+    ]
+  },
+  {
+    id: 'obra_completa',
+    label: 'Obra completa',
+    description: 'Proposta para gestão, acompanhamento e coordenação de reforma até entrega.',
+    paymentTerms: '20% na contratação, 60% parcelado conforme cronograma físico-financeiro e 20% na entrega da obra.',
+    deliveryTerms: 'Prazo definido após cronograma detalhado, disponibilidade de equipes, materiais e aprovações necessárias.',
+    notes: 'Inclui planejamento da obra, acompanhamento técnico, gestão de fornecedores, controle de custos e relatórios de andamento.',
+    items: [
+      { description: 'Planejamento executivo, cronograma e organização da obra', unit: 'etapa', quantity: 1, unitPrice: 6500, category: 'service' },
+      { description: 'Coordenação técnica de fornecedores e frentes de serviço', unit: 'mês', quantity: 3, unitPrice: 5200, category: 'service' },
+      { description: 'Vistorias, registros fotográficos e relatórios de evolução', unit: 'mês', quantity: 3, unitPrice: 2800, category: 'service' },
+      { description: 'Entrega técnica, checklist final e termo de conclusão', unit: 'etapa', quantity: 1, unitPrice: 3500, category: 'service' }
+    ]
+  },
+  {
+    id: 'comercial',
+    label: 'Ambiente comercial',
+    description: 'Projeto para loja, clínica, sala comercial ou escritório com foco em operação.',
+    paymentTerms: '35% na aprovação, 35% na validação do layout e 30% na entrega do executivo.',
+    deliveryTerms: 'Prazo estimado de 40 a 55 dias, sujeito à aprovação de layout, normas do imóvel e informações técnicas.',
+    notes: 'Inclui estudo de fluxo, layout operacional, identidade do ambiente, especificações e detalhamento para execução.',
+    items: [
+      { description: 'Diagnóstico de operação, público e fluxo de atendimento', unit: 'etapa', quantity: 1, unitPrice: 4200, category: 'service' },
+      { description: 'Layout comercial e estudo de experiência do usuário', unit: 'etapa', quantity: 1, unitPrice: 6800, category: 'service' },
+      { description: 'Projeto executivo, detalhamento técnico e acabamentos', unit: 'etapa', quantity: 1, unitPrice: 11800, category: 'service' },
+      { description: 'Memorial de materiais, mobiliário e comunicação visual', unit: 'etapa', quantity: 1, unitPrice: 3900, category: 'service' }
+    ]
+  }
+] as const;
+
 const ProposalsPage: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
@@ -559,6 +631,28 @@ const ProposalsPage: React.FC = () => {
     });
   };
 
+  const handleApplyTemplate = (templateId: string) => {
+    const template = proposalTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+
+    setFormData({
+      ...formData,
+      templateId,
+      notes: template.notes,
+      paymentTerms: template.paymentTerms,
+      deliveryTerms: template.deliveryTerms,
+      validityDays: 15,
+      items: template.items.map((item, index) => ({
+        id: `${template.id}-${index}-${Date.now()}`,
+        description: item.description,
+        unit: item.unit,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        category: item.category as 'product' | 'service'
+      }))
+    });
+  };
+
   const handleApproveAndCreateProject = async (proposal: Proposal, e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -894,6 +988,29 @@ const ProposalsPage: React.FC = () => {
                       <option value="approved">Aprovada</option>
                       <option value="rejected">Rejeitada</option>
                     </select>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest">3. Modelo de Proposta</label>
+                    <p className="text-xs text-gray-400 font-bold mt-1">Escolha um modelo para preencher escopo, condições e premissas automaticamente.</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {proposalTemplates.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => handleApplyTemplate(template.id)}
+                        className={`p-4 rounded-2xl border text-left transition-all ${formData.templateId === template.id
+                          ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-500 shadow-md'
+                          : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800 hover:border-teal-300'
+                          }`}
+                      >
+                        <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">{template.label}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-bold leading-relaxed mt-2">{template.description}</p>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
