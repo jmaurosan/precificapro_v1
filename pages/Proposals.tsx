@@ -696,9 +696,9 @@ const ProposalsPage: React.FC = () => {
 
     const { data: demoProposals, error } = await supabase
       .from('proposals')
-      .select('id')
+      .select('id, proposal_number')
       .eq('user_id', user.id)
-      .ilike('observacoes', '%"isDemo":true%');
+      .like('proposal_number', 'DEMO-%');
 
     if (error) {
       setMessage({ text: 'Erro ao buscar demos: ' + error.message, type: 'error' });
