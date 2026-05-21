@@ -159,6 +159,8 @@ const ProposalsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [officeProfile, setOfficeProfile] = useState<OfficeProfile | null>(null);
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+  const [detailsTab, setDetailsTab] = useState<'summary' | 'items' | 'history' | 'actions'>('summary');
 
   useEffect(() => {
     if (user) {
@@ -963,8 +965,8 @@ const ProposalsPage: React.FC = () => {
     ].join('\n');
   };
 
-  const handleCopyProposalSummary = async (proposal: Proposal, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCopyProposalSummary = async (proposal: Proposal, e?: React.MouseEvent) => {
+    e?.stopPropagation();
 
     const summary = buildShareSummary(proposal);
     try {
@@ -983,8 +985,8 @@ const ProposalsPage: React.FC = () => {
     setTimeout(() => setMessage(null), 3500);
   };
 
-  const handleSendProposalWhatsapp = (proposal: Proposal, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleSendProposalWhatsapp = (proposal: Proposal, e?: React.MouseEvent) => {
+    e?.stopPropagation();
 
     if (!proposal.clientPhone) {
       setMessage({ text: 'Este cliente não tem WhatsApp cadastrado. Use Copiar resumo.', type: 'error' });
@@ -1014,8 +1016,8 @@ const ProposalsPage: React.FC = () => {
     return `${baseUrl}#/public/proposal/${publicToken}`;
   };
 
-  const handleCopyPublicProposalLink = async (proposal: Proposal, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCopyPublicProposalLink = async (proposal: Proposal, e?: React.MouseEvent) => {
+    e?.stopPropagation();
 
     let publicToken = proposal.publicToken;
 
@@ -1098,8 +1100,8 @@ const ProposalsPage: React.FC = () => {
       : 'Aceite registrado internamente pelo escritório.')
   }));
 
-  const handleRegisterAcceptance = async (proposal: Proposal, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRegisterAcceptance = async (proposal: Proposal, e?: React.MouseEvent) => {
+    e?.stopPropagation();
 
     if (proposal.status === 'approved' && proposal.acceptedAt) {
       setMessage({ text: 'Esta proposta já tem aceite registrado.', type: 'success' });
@@ -1141,8 +1143,8 @@ const ProposalsPage: React.FC = () => {
     setTimeout(() => setMessage(null), 3500);
   };
 
-  const handleApproveAndCreateProject = async (proposal: Proposal, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleApproveAndCreateProject = async (proposal: Proposal, e?: React.MouseEvent) => {
+    e?.stopPropagation();
 
     if (proposal.status === 'approved' && proposal.projectId) {
       navigate('/projects');
@@ -1334,6 +1336,18 @@ const ProposalsPage: React.FC = () => {
     p.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.projetoNome.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const selectedProposal = selectedProposalId
+    ? proposals.find((proposal) => proposal.id === selectedProposalId) || null
+    : null;
+  const selectedProposalSubtotal = selectedProposal
+    ? selectedProposal.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0)
+    : 0;
+  const detailTabs: { id: typeof detailsTab; label: string }[] = [
+    { id: 'summary', label: 'Resumo' },
+    { id: 'items', label: 'Itens' },
+    { id: 'history', label: 'Histórico' },
+    { id: 'actions', label: 'Ações' }
+  ];
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-500">
@@ -1392,7 +1406,10 @@ const ProposalsPage: React.FC = () => {
         {filteredProposals.map((p) => (
           <div
             key={p.id}
-            onClick={() => handleViewProposal(p)}
+            onClick={() => {
+              setSelectedProposalId(p.id);
+              setDetailsTab('summary');
+            }}
             className="group bg-white dark:bg-gray-900 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl hover:border-teal-400 transition-all relative cursor-pointer overflow-hidden"
           >
             <div className="flex items-center justify-between mb-6">
@@ -1451,7 +1468,11 @@ const ProposalsPage: React.FC = () => {
                 <p className="text-xl font-black text-gray-900 dark:text-white">R$ {p.total.toLocaleString('pt-BR')}</p>
               </div>
               <button
-                onClick={(e) => { e.stopPropagation(); handleViewProposal(p); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedProposalId(p.id);
+                  setDetailsTab('summary');
+                }}
                 className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-all shadow-sm"
               >
                 <ChevronRight size={20} />
@@ -1500,6 +1521,199 @@ const ProposalsPage: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {selectedProposal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-md">
+          <div className="bg-white dark:bg-gray-950 rounded-[40px] w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+            <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 shrink-0 relative">
+              <div className="pr-14">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${selectedProposal.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                    {{
+                      approved: 'Aprovada',
+                      draft: 'Rascunho',
+                      sent: 'Enviada',
+                      rejected: 'Rejeitada'
+                    }[selectedProposal.status] || selectedProposal.status}
+                  </span>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">#{selectedProposal.proposalNumber}</p>
+                </div>
+                <h2 className="mt-3 text-2xl md:text-3xl font-black text-gray-900 dark:text-white">{selectedProposal.client}</h2>
+                <p className="mt-1 text-sm font-bold text-teal-600 dark:text-teal-400">{selectedProposal.projetoNome}</p>
+              </div>
+              <button
+                onClick={() => setSelectedProposalId(null)}
+                className="absolute right-6 top-6 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-colors text-gray-500 dark:text-gray-300"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="px-6 md:px-8 pt-5 shrink-0">
+              <div className="flex flex-wrap gap-2 rounded-3xl bg-gray-100 p-2 dark:bg-gray-900">
+                {detailTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setDetailsTab(tab.id)}
+                    className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      detailsTab === tab.id
+                        ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20'
+                        : 'text-gray-500 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+              {detailsTab === 'summary' && (
+                <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+                  <div className="space-y-6">
+                    <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Resumo comercial</p>
+                      <h3 className="mt-3 text-xl font-black text-gray-900 dark:text-white">{selectedProposal.client}</h3>
+                      <p className="mt-2 text-sm font-semibold text-gray-500 dark:text-gray-400">Proposta emitida em {formatDate(selectedProposal.proposalDate)} para {selectedProposal.projetoNome || 'Geral'}.</p>
+                      {selectedProposal.notes && (
+                        <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-gray-600 dark:text-gray-300">{selectedProposal.notes}</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-[28px] border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Pagamento</p>
+                        <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-300">{selectedProposal.paymentTerms || 'A combinar.'}</p>
+                      </div>
+                      <div className="rounded-[28px] border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Prazos</p>
+                        <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-300">{selectedProposal.deliveryTerms || 'Prazos a confirmar.'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <aside className="rounded-[32px] border border-teal-100 bg-teal-50 p-6 dark:border-teal-900/50 dark:bg-teal-950/20">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Valor total</p>
+                    <p className="mt-3 text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(selectedProposal.total)}</p>
+                    <div className="mt-6 space-y-3 text-sm font-bold text-gray-600 dark:text-gray-300">
+                      <div className="flex justify-between gap-4">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(selectedProposalSubtotal)}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span>Itens</span>
+                        <span>{selectedProposal.items.length}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span>Validade</span>
+                        <span>{selectedProposal.validityDays || 15} dias</span>
+                      </div>
+                    </div>
+                    {selectedProposal.acceptedAt && (
+                      <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+                        <p className="text-[10px] font-black uppercase tracking-widest">Aceite registrado</p>
+                        <p className="mt-1 text-sm font-bold">{formatDateTime(selectedProposal.acceptedAt)}</p>
+                      </div>
+                    )}
+                  </aside>
+                </div>
+              )}
+
+              {detailsTab === 'items' && (
+                <div className="space-y-4">
+                  {selectedProposal.items.map((item) => (
+                    <div key={item.id} className="grid gap-4 rounded-[28px] border border-gray-100 bg-gray-50 p-5 md:grid-cols-[1fr_90px_120px_140px] dark:border-gray-800 dark:bg-gray-900">
+                      <div>
+                        <p className="font-black text-gray-900 dark:text-white">{item.description}</p>
+                        <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400">{item.category === 'service' ? 'Serviço' : 'Produto'} - {item.unit}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Qtd.</p>
+                        <p className="mt-1 font-black text-gray-900 dark:text-white">{item.quantity.toLocaleString('pt-BR')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Unitário</p>
+                        <p className="mt-1 font-black text-gray-900 dark:text-white">{formatCurrency(item.unitPrice)}</p>
+                      </div>
+                      <div className="md:text-right">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total</p>
+                        <p className="mt-1 font-black text-teal-600 dark:text-teal-400">{formatCurrency(item.quantity * item.unitPrice)}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-end rounded-[28px] bg-gray-900 p-5 text-white dark:bg-white dark:text-gray-950">
+                    <div className="text-right">
+                      <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Total da proposta</p>
+                      <p className="mt-1 text-2xl font-black">{formatCurrency(selectedProposal.total)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {detailsTab === 'history' && (
+                <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
+                  <div className="mb-6 flex items-center gap-2">
+                    <Clock3 size={18} className="text-teal-500" />
+                    <h3 className="text-lg font-black text-gray-900 dark:text-white">Histórico comercial</h3>
+                  </div>
+                  <div className="space-y-5">
+                    {getProposalTimeline(selectedProposal).map((event) => (
+                      <div key={event.id} className="grid grid-cols-[14px_1fr] gap-4">
+                        <span className={`mt-1.5 h-3 w-3 rounded-full ${
+                          event.actorType === 'client'
+                            ? 'bg-emerald-400'
+                            : event.actorType === 'user'
+                              ? 'bg-teal-400'
+                              : 'bg-gray-400'
+                        }`} />
+                        <div className="border-b border-gray-200 pb-5 last:border-b-0 dark:border-gray-800">
+                          <p className="font-black text-gray-900 dark:text-white">{event.title}</p>
+                          <p className="mt-1 text-xs font-bold text-gray-400">{formatDateTime(event.createdAt)}{event.details ? ` - ${event.details}` : ''}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {detailsTab === 'actions' && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <button onClick={() => handleViewProposal(selectedProposal)} className="rounded-[28px] bg-gray-900 p-5 text-left text-white transition hover:opacity-90 dark:bg-white dark:text-gray-950">
+                    <p className="font-black">Abrir PDF da proposta</p>
+                    <p className="mt-1 text-sm opacity-70">Visualizar, imprimir ou salvar em PDF.</p>
+                  </button>
+                  <button onClick={() => handleViewContract(selectedProposal)} className="rounded-[28px] bg-slate-100 p-5 text-left text-slate-900 transition hover:bg-slate-200 dark:bg-gray-900 dark:text-white dark:hover:bg-gray-800">
+                    <p className="font-black">Contrato / aceite</p>
+                    <p className="mt-1 text-sm opacity-70">Gerar termo de aceite para assinatura.</p>
+                  </button>
+                  <button onClick={() => handleCopyPublicProposalLink(selectedProposal)} className="rounded-[28px] bg-teal-50 p-5 text-left text-teal-700 transition hover:bg-teal-100 dark:bg-teal-950/30 dark:text-teal-300">
+                    <p className="font-black">Copiar link do cliente</p>
+                    <p className="mt-1 text-sm opacity-70">Enviar portal público para aprovação online.</p>
+                  </button>
+                  <button onClick={() => handleSendProposalWhatsapp(selectedProposal)} className="rounded-[28px] bg-emerald-50 p-5 text-left text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300">
+                    <p className="font-black">Enviar por WhatsApp</p>
+                    <p className="mt-1 text-sm opacity-70">Abrir mensagem pronta para o cliente.</p>
+                  </button>
+                  <button onClick={() => handleCopyProposalSummary(selectedProposal)} className="rounded-[28px] bg-gray-100 p-5 text-left text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">
+                    <p className="font-black">Copiar resumo</p>
+                    <p className="mt-1 text-sm opacity-70">Resumo curto para e-mail ou conversa.</p>
+                  </button>
+                  {selectedProposal.status !== 'approved' && (
+                    <button onClick={() => handleRegisterAcceptance(selectedProposal)} className="rounded-[28px] bg-teal-600 p-5 text-left text-white transition hover:bg-teal-700">
+                      <p className="font-black">Registrar aceite interno</p>
+                      <p className="mt-1 text-sm opacity-80">Marcar proposta como aprovada.</p>
+                    </button>
+                  )}
+                  <button onClick={() => handleApproveAndCreateProject(selectedProposal)} className="rounded-[28px] bg-emerald-600 p-5 text-left text-white transition hover:bg-emerald-700 md:col-span-2">
+                    <p className="font-black">{selectedProposal.status === 'approved' ? 'Abrir obras' : 'Aceite e virar obra'}</p>
+                    <p className="mt-1 text-sm opacity-80">Converter a proposta aprovada em obra/projeto ativo.</p>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showFormModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-md">
