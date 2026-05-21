@@ -514,6 +514,19 @@ const ProposalsPage: React.FC = () => {
     .replace(/-+/g, '-')
     .toLowerCase();
 
+  const withTimeout = async <T,>(promise: PromiseLike<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
+
   const formatTimelineDate = (date?: string) => {
     if (!date) return '';
     return new Date(date).toLocaleDateString('pt-BR', {
@@ -1303,56 +1316,69 @@ const ProposalsPage: React.FC = () => {
 
     setUploadingContractId(proposal.id);
     const filePath = `${user.id}/${proposal.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
-    const { error: uploadError } = await supabase.storage
-      .from('proposal-contracts')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
 
-    if (uploadError) {
-      setUploadingContractId(null);
+    try {
+      const { error: uploadError } = await withTimeout(
+        supabase.storage
+          .from('proposal-contracts')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          }),
+        45000,
+        'Tempo esgotado ao enviar o arquivo. Verifique sua conexão e tente novamente.'
+      );
+
+      if (uploadError) {
+        throw new Error(uploadError.message || 'Storage recusou o envio do contrato.');
+      }
+
+      const { error: metadataError } = await withTimeout(
+        supabase
+          .from('proposal_contract_files')
+          .insert([{
+            user_id: user.id,
+            proposal_id: proposal.id,
+            file_name: file.name,
+            file_path: filePath,
+            file_type: file.type,
+            file_size: file.size,
+            status: 'signed',
+            notes: 'Contrato assinado anexado ao dossiê da proposta.'
+          }]),
+        20000,
+        'Arquivo enviado, mas o registro do contrato demorou demais.'
+      );
+
+      if (metadataError) {
+        await supabase.storage.from('proposal-contracts').remove([filePath]);
+        throw new Error(metadataError.message || 'Não foi possível registrar o contrato no banco.');
+      }
+
+      await recordProposalEvent(
+        proposal.id,
+        'signed_contract_uploaded',
+        'Contrato assinado anexado',
+        file.name,
+        { fileName: file.name, fileSize: file.size, fileType: file.type }
+      );
+
+      await withTimeout(
+        fetchProposals(),
+        20000,
+        'Contrato anexado, mas a atualização da lista demorou demais. Recarregue a página.'
+      );
+      setMessage({ text: 'Contrato assinado anexado com sucesso.', type: 'success' });
+      setTimeout(() => setMessage(null), 4000);
+    } catch (error: any) {
       setMessage({
-        text: 'Erro ao enviar contrato. Aplique a migration 00005_proposal_signed_contracts.sql no Supabase e tente novamente.',
+        text: `Erro ao enviar contrato: ${error?.message || 'verifique o Supabase Storage e tente novamente.'}`,
         type: 'error'
       });
-      setTimeout(() => setMessage(null), 6500);
-      return;
-    }
-
-    const { error: metadataError } = await supabase
-      .from('proposal_contract_files')
-      .insert([{
-        user_id: user.id,
-        proposal_id: proposal.id,
-        file_name: file.name,
-        file_path: filePath,
-        file_type: file.type,
-        file_size: file.size,
-        status: 'signed',
-        notes: 'Contrato assinado anexado ao dossiê da proposta.'
-      }]);
-
-    if (metadataError) {
-      await supabase.storage.from('proposal-contracts').remove([filePath]);
+      setTimeout(() => setMessage(null), 7000);
+    } finally {
       setUploadingContractId(null);
-      setMessage({ text: 'Arquivo enviado, mas houve erro ao registrar no histórico: ' + metadataError.message, type: 'error' });
-      setTimeout(() => setMessage(null), 6500);
-      return;
     }
-
-    await recordProposalEvent(
-      proposal.id,
-      'signed_contract_uploaded',
-      'Contrato assinado anexado',
-      file.name,
-      { fileName: file.name, fileSize: file.size, fileType: file.type }
-    );
-
-    await fetchProposals();
-    setUploadingContractId(null);
-    setMessage({ text: 'Contrato assinado anexado com sucesso.', type: 'success' });
-    setTimeout(() => setMessage(null), 4000);
   };
 
   const handleOpenSignedContract = async (contract: ProposalContractFile) => {
