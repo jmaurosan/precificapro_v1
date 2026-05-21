@@ -45,6 +45,10 @@ interface Proposal {
   paymentTerms?: string;
   deliveryTerms?: string;
   validityDays?: number;
+  acceptedAt?: string;
+  acceptedBy?: string;
+  acceptanceMethod?: string;
+  acceptanceNotes?: string;
 }
 
 interface OfficeProfile {
@@ -318,7 +322,11 @@ const ProposalsPage: React.FC = () => {
         notes: '',
         paymentTerms: '40% na aprovação da proposta, 40% no desenvolvimento e 20% na entrega final.',
         deliveryTerms: 'Prazos detalhados serão confirmados após alinhamento técnico, aprovação do escopo e disponibilidade das informações do cliente.',
-        validityDays: 15
+        validityDays: 15,
+        acceptedAt: '',
+        acceptedBy: '',
+        acceptanceMethod: '',
+        acceptanceNotes: ''
       };
     }
 
@@ -328,25 +336,40 @@ const ProposalsPage: React.FC = () => {
         notes: parsed.notes || '',
         paymentTerms: parsed.paymentTerms || '40% na aprovação da proposta, 40% no desenvolvimento e 20% na entrega final.',
         deliveryTerms: parsed.deliveryTerms || 'Prazos detalhados serão confirmados após alinhamento técnico, aprovação do escopo e disponibilidade das informações do cliente.',
-        validityDays: Number(parsed.validityDays || 15)
+        validityDays: Number(parsed.validityDays || 15),
+        acceptedAt: parsed.acceptedAt || '',
+        acceptedBy: parsed.acceptedBy || '',
+        acceptanceMethod: parsed.acceptanceMethod || '',
+        acceptanceNotes: parsed.acceptanceNotes || ''
       };
     } catch {
       return {
         notes: rawNotes,
         paymentTerms: '40% na aprovação da proposta, 40% no desenvolvimento e 20% na entrega final.',
         deliveryTerms: 'Prazos detalhados serão confirmados após alinhamento técnico, aprovação do escopo e disponibilidade das informações do cliente.',
-        validityDays: 15
+        validityDays: 15,
+        acceptedAt: '',
+        acceptedBy: '',
+        acceptanceMethod: '',
+        acceptanceNotes: ''
       };
     }
   };
 
-  const buildProposalNotes = () => JSON.stringify({
-    notes: formData.notes || '',
-    paymentTerms: formData.paymentTerms || '',
-    deliveryTerms: formData.deliveryTerms || '',
-    validityDays: Number(formData.validityDays || 15),
-    isDemo: Boolean(formData.isDemo)
+  const buildProposalNotesPayload = (source: any, extra: Record<string, any> = {}) => ({
+    notes: source.notes || '',
+    paymentTerms: source.paymentTerms || '',
+    deliveryTerms: source.deliveryTerms || '',
+    validityDays: Number(source.validityDays || 15),
+    isDemo: Boolean(source.isDemo),
+    acceptedAt: source.acceptedAt || '',
+    acceptedBy: source.acceptedBy || '',
+    acceptanceMethod: source.acceptanceMethod || '',
+    acceptanceNotes: source.acceptanceNotes || '',
+    ...extra
   });
+
+  const buildProposalNotes = () => JSON.stringify(buildProposalNotesPayload(formData));
 
   const escapeHtml = (value?: string | number | null) => String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -361,6 +384,17 @@ const ProposalsPage: React.FC = () => {
   });
 
   const formatDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR');
+
+  const formatDateTime = (date?: string) => {
+    if (!date) return '';
+    return new Date(date).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   const getOfficeAddress = () => {
     const address = officeProfile?.address || {};
@@ -555,6 +589,9 @@ const ProposalsPage: React.FC = () => {
 
     const officeAddress = getOfficeAddress();
     const contractDate = new Date().toLocaleDateString('pt-BR');
+    const acceptanceRecord = proposal.acceptedAt
+      ? `Aceite interno registrado em ${formatDateTime(proposal.acceptedAt)} por ${proposal.acceptedBy || proposal.client}.`
+      : 'Aceite pendente de assinatura ou confirmação formal pelo contratante.';
     const itemsRows = proposal.items.map((item, index) => `
       <tr>
         <td>${index + 1}</td>
@@ -654,6 +691,10 @@ const ProposalsPage: React.FC = () => {
 
             <h2>6. Aceite</h2>
             <p>Ao assinar este termo, as partes declaram ciência e concordância com o escopo, valores, condições comerciais e premissas descritas.</p>
+            <div class="box">
+              <p><strong>Registro no PrecificaPro:</strong> ${escapeHtml(acceptanceRecord)}</p>
+              ${proposal.acceptanceNotes ? `<p>${escapeHtml(proposal.acceptanceNotes)}</p>` : ''}
+            </div>
 
             <div class="signatures">
               <div class="line">${escapeHtml(officeProfile?.name || proposal.company || 'Contratada')}</div>
@@ -830,6 +871,50 @@ const ProposalsPage: React.FC = () => {
     });
   };
 
+  const buildAcceptanceNotes = (proposal: Proposal, projectId?: string) => JSON.stringify(buildProposalNotesPayload(proposal, {
+    acceptedAt: proposal.acceptedAt || new Date().toISOString(),
+    acceptedBy: proposal.acceptedBy || proposal.client,
+    acceptanceMethod: proposal.acceptanceMethod || 'internal',
+    acceptanceNotes: proposal.acceptanceNotes || (projectId
+      ? 'Aceite registrado internamente ao converter a proposta em obra.'
+      : 'Aceite registrado internamente pelo escritório.')
+  }));
+
+  const handleRegisterAcceptance = async (proposal: Proposal, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (proposal.status === 'approved' && proposal.acceptedAt) {
+      setMessage({ text: 'Esta proposta já tem aceite registrado.', type: 'success' });
+      setTimeout(() => setMessage(null), 3500);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('proposals')
+      .update({
+        status: 'approved',
+        observacoes: buildAcceptanceNotes(proposal)
+      })
+      .eq('id', proposal.id);
+
+    if (error) {
+      setMessage({ text: 'Erro ao registrar aceite: ' + error.message, type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    if (proposal.clientId) {
+      await supabase
+        .from('clients')
+        .update({ status: 'contratado' })
+        .eq('id', proposal.clientId);
+    }
+
+    await fetchProposals();
+    setMessage({ text: 'Aceite registrado e lead marcado como contratado.', type: 'success' });
+    setTimeout(() => setMessage(null), 3500);
+  };
+
   const handleApproveAndCreateProject = async (proposal: Proposal, e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -867,7 +952,11 @@ const ProposalsPage: React.FC = () => {
 
     await supabase
       .from('proposals')
-      .update({ status: 'approved', project_id: projectId })
+      .update({
+        status: 'approved',
+        project_id: projectId,
+        observacoes: buildAcceptanceNotes(proposal, projectId)
+      })
       .eq('id', proposal.id);
 
     if (proposal.clientId) {
@@ -1080,6 +1169,12 @@ const ProposalsPage: React.FC = () => {
               <Hammer size={12} className="text-teal-600" />
               <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest">{p.projetoNome}</p>
             </div>
+            {p.acceptedAt && (
+              <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+                <p className="text-[9px] font-black uppercase tracking-widest">Aceite registrado</p>
+                <p className="mt-1 text-xs font-bold">{formatDateTime(p.acceptedAt)}</p>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-6 border-t border-gray-50 dark:border-gray-800">
               <div>
@@ -1113,11 +1208,19 @@ const ProposalsPage: React.FC = () => {
             >
               <FileSignature size={16} /> Contrato / Aceite
             </button>
+            {p.status !== 'approved' && (
+              <button
+                onClick={(e) => handleRegisterAcceptance(p, e)}
+                className="mt-2 w-full py-3 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-100 dark:border-teal-800 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-teal-600 hover:text-white flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 size={16} /> Registrar Aceite
+              </button>
+            )}
             <button
               onClick={(e) => handleApproveAndCreateProject(p, e)}
               className="mt-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
             >
-              <CheckCircle2 size={16} /> {p.status === 'approved' ? 'Abrir Obra' : 'Aprovar e Virar Obra'}
+              <CheckCircle2 size={16} /> {p.status === 'approved' ? 'Abrir Obra' : 'Aceite e Virar Obra'}
             </button>
           </div>
         ))}
