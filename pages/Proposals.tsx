@@ -5,6 +5,7 @@ import {
   Clipboard,
   FileSignature,
   Hammer,
+  Link2,
   MessageCircle,
   Plus,
   Search,
@@ -49,6 +50,7 @@ interface Proposal {
   acceptedBy?: string;
   acceptanceMethod?: string;
   acceptanceNotes?: string;
+  publicToken?: string;
 }
 
 interface OfficeProfile {
@@ -228,6 +230,7 @@ const ProposalsPage: React.FC = () => {
         projetoNome: p.projects?.name || p.project_name || 'Geral',
         total: Number(p.total || 0),
         status: p.status as any,
+        publicToken: p.public_token || '',
         createdAt: p.created_at,
         itemsCount: p.proposal_items?.length || 0,
         items: (p.proposal_items || []).map((item: any) => ({
@@ -849,6 +852,56 @@ const ProposalsPage: React.FC = () => {
     window.open(createWhatsappLink(proposal.clientPhone, buildShareSummary(proposal)), '_blank');
   };
 
+  const generatePublicToken = () => {
+    if (window.crypto?.randomUUID) {
+      return window.crypto.randomUUID().replace(/-/g, '');
+    }
+    return `${Date.now()}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+  };
+
+  const getPublicProposalUrl = (publicToken: string) => {
+    const baseUrl = `${window.location.origin}${window.location.pathname}`;
+    return `${baseUrl}#/public/proposal/${publicToken}`;
+  };
+
+  const handleCopyPublicProposalLink = async (proposal: Proposal, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    let publicToken = proposal.publicToken;
+
+    if (!publicToken) {
+      publicToken = generatePublicToken();
+      const { error } = await supabase
+        .from('proposals')
+        .update({
+          public_token: publicToken,
+          public_token_created_at: new Date().toISOString()
+        })
+        .eq('id', proposal.id);
+
+      if (error) {
+        setMessage({
+          text: 'Nao foi possivel gerar o link publico. Aplique a migration 00003_public_proposal_portal.sql no Supabase e tente novamente.',
+          type: 'error'
+        });
+        setTimeout(() => setMessage(null), 6000);
+        return;
+      }
+
+      setProposals((current) => current.map((item) => (
+        item.id === proposal.id ? { ...item, publicToken } : item
+      )));
+    }
+
+    try {
+      await navigator.clipboard.writeText(getPublicProposalUrl(publicToken));
+      setMessage({ text: 'Link publico da proposta copiado.', type: 'success' });
+    } catch {
+      setMessage({ text: getPublicProposalUrl(publicToken), type: 'success' });
+    }
+    setTimeout(() => setMessage(null), 5000);
+  };
+
   const handleApplyTemplate = (templateId: string) => {
     const template = proposalTemplates.find((item) => item.id === templateId);
     if (!template) return;
@@ -1188,7 +1241,7 @@ const ProposalsPage: React.FC = () => {
                 <ChevronRight size={20} />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 mt-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-5">
               <button
                 onClick={(e) => handleSendProposalWhatsapp(p, e)}
                 className="py-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-emerald-600 hover:text-white flex items-center justify-center gap-2"
@@ -1200,6 +1253,12 @@ const ProposalsPage: React.FC = () => {
                 className="py-3 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-gray-900 hover:text-white dark:hover:bg-white dark:hover:text-gray-900 flex items-center justify-center gap-2"
               >
                 <Clipboard size={15} /> Copiar
+              </button>
+              <button
+                onClick={(e) => handleCopyPublicProposalLink(p, e)}
+                className="py-3 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-teal-600 hover:text-white flex items-center justify-center gap-2"
+              >
+                <Link2 size={15} /> Link Cliente
               </button>
             </div>
             <button

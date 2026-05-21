@@ -13,6 +13,7 @@ const Financial = React.lazy(() => import('./pages/Financial'));
 const ProjectFinances = React.lazy(() => import('./pages/ProjectFinances'));
 const Projects = React.lazy(() => import('./pages/Projects'));
 const ProposalsPage = React.lazy(() => import('./pages/Proposals'));
+const PublicProposalPage = React.lazy(() => import('./pages/PublicProposal'));
 const ReceiptsPage = React.lazy(() => import('./pages/Receipts'));
 const Registrations = React.lazy(() => import('./pages/Registrations'));
 const Schedule = React.lazy(() => import('./pages/Schedule'));
@@ -47,6 +48,7 @@ const AppRoutes: React.FC = () => {
     <Suspense fallback={<AppLoader label="Preparando tela..." />}>
       <Routes>
         <Route path="/auth" element={isAuthenticated ? <Navigate to="/" replace /> : <Auth />} />
+        <Route path="/public/proposal/:token" element={<PublicProposalPage />} />
         <Route path="/*" element={
           <ProtectedRoute>
             <Layout>
