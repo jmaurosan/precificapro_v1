@@ -175,6 +175,23 @@ const ProposalsPage: React.FC = () => {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [detailsTab, setDetailsTab] = useState<'summary' | 'items' | 'history' | 'contracts' | 'actions'>('summary');
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
+  const [contractUploadStartedAt, setContractUploadStartedAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!uploadingContractId || !contractUploadStartedAt) return;
+
+    const watchdog = window.setTimeout(() => {
+      setUploadingContractId(null);
+      setContractUploadStartedAt(null);
+      setMessage({
+        text: 'O envio demorou mais que o esperado e foi liberado. Recarregue a página e tente anexar novamente.',
+        type: 'error'
+      });
+      setTimeout(() => setMessage(null), 7000);
+    }, 30000);
+
+    return () => window.clearTimeout(watchdog);
+  }, [uploadingContractId, contractUploadStartedAt]);
 
   useEffect(() => {
     if (user) {
@@ -1315,6 +1332,7 @@ const ProposalsPage: React.FC = () => {
     }
 
     setUploadingContractId(proposal.id);
+    setContractUploadStartedAt(Date.now());
     const filePath = `${user.id}/${proposal.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
 
     try {
@@ -1378,7 +1396,18 @@ const ProposalsPage: React.FC = () => {
       setTimeout(() => setMessage(null), 7000);
     } finally {
       setUploadingContractId(null);
+      setContractUploadStartedAt(null);
     }
+  };
+
+  const handleCancelContractUpload = () => {
+    setUploadingContractId(null);
+    setContractUploadStartedAt(null);
+    setMessage({
+      text: 'Envio liberado na interface. Se o arquivo aparecer depois, ele foi concluído pelo Supabase; se não aparecer, tente anexar novamente.',
+      type: 'success'
+    });
+    setTimeout(() => setMessage(null), 6000);
   };
 
   const handleOpenSignedContract = async (contract: ProposalContractFile) => {
@@ -1874,17 +1903,30 @@ const ProposalsPage: React.FC = () => {
                         <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Contrato assinado</h3>
                         <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Anexe o PDF ou imagem do contrato/termo assinado pelo cliente.</p>
                       </div>
-                      <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black uppercase tracking-widest text-white transition hover:bg-teal-700">
-                        <Upload size={17} />
-                        {uploadingContractId === selectedProposal.id ? 'Enviando...' : 'Anexar'}
-                        <input
-                          type="file"
-                          accept="application/pdf,image/png,image/jpeg,image/webp"
-                          className="hidden"
-                          disabled={uploadingContractId === selectedProposal.id}
-                          onChange={(e) => handleSignedContractUpload(selectedProposal, e)}
-                        />
-                      </label>
+                      {uploadingContractId === selectedProposal.id ? (
+                        <div className="flex flex-col gap-2 sm:items-end">
+                          <button
+                            type="button"
+                            onClick={handleCancelContractUpload}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-500 px-5 py-3 text-sm font-black uppercase tracking-widest text-white transition hover:bg-amber-600"
+                          >
+                            <Upload size={17} />
+                            Cancelar envio
+                          </button>
+                          <p className="text-xs font-bold text-gray-400">Se demorar, cancele e tente novamente.</p>
+                        </div>
+                      ) : (
+                        <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black uppercase tracking-widest text-white transition hover:bg-teal-700">
+                          <Upload size={17} />
+                          Anexar
+                          <input
+                            type="file"
+                            accept="application/pdf,image/png,image/jpeg,image/webp"
+                            className="hidden"
+                            onChange={(e) => handleSignedContractUpload(selectedProposal, e)}
+                          />
+                        </label>
+                      )}
                     </div>
 
                     <div className="mt-6 space-y-3">
