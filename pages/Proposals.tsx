@@ -997,24 +997,24 @@ const ProposalsPage: React.FC = () => {
       {showFormModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-md">
           <div className="bg-white dark:bg-gray-950 rounded-[40px] w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-800">
-            <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between shrink-0">
-              <div className="flex-1 pr-6">
+            <div className="p-8 border-b border-gray-50 dark:border-gray-800 shrink-0 relative">
+              <div className="pr-16">
                 <h2 className="text-2xl font-black text-gray-900 dark:text-white">Nova Proposta Comercial</h2>
-                <div className="mt-4 max-w-xl">
+                <div className="mt-4 w-full">
                   <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest">Modelo rápido de proposta</label>
                   <select
                     value={formData.templateId || ''}
                     onChange={(e) => handleApplyTemplate(e.target.value)}
-                    className="mt-2 w-full px-5 py-3.5 bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800 rounded-2xl font-black text-teal-700 dark:text-teal-300 outline-none"
+                    className="mt-2 w-full px-5 py-3.5 bg-gray-50 dark:bg-gray-900 border border-teal-200 dark:border-teal-700 rounded-2xl font-black text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500"
                   >
-                    <option value="">Escolha um modelo para preencher automaticamente</option>
+                    <option value="" className="bg-white text-gray-900 dark:bg-gray-900 dark:text-white">Escolha um modelo para preencher automaticamente</option>
                     {proposalTemplates.map((template) => (
-                      <option key={template.id} value={template.id}>{template.label}</option>
+                      <option key={template.id} value={template.id} className="bg-white text-gray-900 dark:bg-gray-900 dark:text-white">{template.label}</option>
                     ))}
                   </select>
                 </div>
               </div>
-              <button onClick={() => setShowFormModal(false)} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-colors"><X size={24} /></button>
+              <button onClick={() => setShowFormModal(false)} className="absolute right-8 top-8 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-colors"><X size={24} /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
               <form id="proposal-form" onSubmit={handleSaveProposal} className="space-y-6">
