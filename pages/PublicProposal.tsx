@@ -57,43 +57,82 @@ const PublicProposalPage: React.FC = () => {
     fetchProposal();
   }, [token]);
 
+  const withTimeout = async <T,>(promise: PromiseLike<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
+
   const fetchProposal = async () => {
-    if (!token) return;
+    if (!token) {
+      setProposal(null);
+      setMessage({ type: 'error', text: 'Link da proposta incompleto.' });
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
-    const { data, error } = await supabase.rpc('get_public_proposal', { proposal_token: token });
+    try {
+      const { data, error } = await withTimeout(
+        supabase.rpc('get_public_proposal', { proposal_token: token }),
+        20000,
+        'Tempo esgotado ao carregar a proposta. Recarregue a pagina ou solicite um novo link.'
+      );
 
-    if (error || !data) {
-      setProposal(null);
-      setMessage({
-        type: 'error',
-        text: error?.message || 'Proposta nao encontrada ou link indisponivel.'
-      });
-    } else {
+      if (error || !data) {
+        setProposal(null);
+        setMessage({
+          type: 'error',
+          text: error?.message || 'Proposta nao encontrada ou link indisponivel.'
+        });
+        return;
+      }
+
       setProposal(data as PublicProposal);
       setSignerName((data as PublicProposal).client || '');
       if (viewedTokenRef.current !== token) {
         viewedTokenRef.current = token;
-        await recordPublicEvent('public_viewed', 'Proposta visualizada pelo cliente', 'Link publico aberto pelo cliente.');
+        recordPublicEvent('public_viewed', 'Proposta visualizada pelo cliente', 'Link publico aberto pelo cliente.');
       }
+    } catch (error: any) {
+      setProposal(null);
+      setMessage({
+        type: 'error',
+        text: error?.message || 'Nao foi possivel carregar a proposta.'
+      });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const recordPublicEvent = async (eventType: string, title: string, details?: string, metadata: Record<string, any> = {}) => {
     if (!token) return;
 
-    const { error } = await supabase.rpc('record_public_proposal_event', {
-      proposal_token: token,
-      event_type_to_record: eventType,
-      event_title: title,
-      event_details: details || null,
-      event_metadata: metadata
-    });
+    try {
+      const { error } = await withTimeout(
+        supabase.rpc('record_public_proposal_event', {
+          proposal_token: token,
+          event_type_to_record: eventType,
+          event_title: title,
+          event_details: details || null,
+          event_metadata: metadata
+        }),
+        6000,
+        'Tempo esgotado ao registrar evento publico.'
+      );
 
-    if (error) {
-      console.warn('Could not record public proposal event:', error.message);
+      if (error) {
+        console.warn('Could not record public proposal event:', error.message);
+      }
+    } catch (error: any) {
+      console.warn('Could not record public proposal event:', error?.message || error);
     }
   };
 
