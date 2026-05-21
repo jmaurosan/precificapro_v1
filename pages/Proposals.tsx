@@ -3,6 +3,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Clipboard,
+  FileSignature,
   Hammer,
   MessageCircle,
   Plus,
@@ -545,6 +546,128 @@ const ProposalsPage: React.FC = () => {
       win.document.close();
     }
   };
+
+  const handleViewContract = (proposal: Proposal, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+
+    const officeAddress = getOfficeAddress();
+    const contractDate = new Date().toLocaleDateString('pt-BR');
+    const itemsRows = proposal.items.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(item.description)}</td>
+        <td class="right">${escapeHtml(formatCurrency(item.quantity * item.unitPrice))}</td>
+      </tr>
+    `).join('');
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>Termo de Aceite - ${escapeHtml(proposal.proposalNumber)}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+            .toolbar { position: sticky; top: 0; z-index: 5; display: flex; justify-content: center; padding: 14px; background: rgba(17,24,39,.92); }
+            .toolbar button { border: 0; border-radius: 999px; padding: 12px 22px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; }
+            .page { width: 210mm; min-height: 297mm; margin: 24px auto; background: white; padding: 22mm; box-shadow: 0 24px 80px rgba(15,23,42,.24); }
+            header { border-bottom: 3px solid #0f766e; padding-bottom: 18px; margin-bottom: 24px; display: flex; justify-content: space-between; gap: 28px; }
+            h1 { margin: 0; font-size: 28px; line-height: 1; color: #0f172a; }
+            h2 { margin: 26px 0 10px; font-size: 13px; color: #0f766e; text-transform: uppercase; letter-spacing: 1.4px; }
+            p, li { font-size: 12.5px; line-height: 1.65; color: #334155; }
+            .muted { color: #64748b; font-size: 11px; }
+            .box { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 14px; padding: 16px; margin: 14px 0; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px #e2e8f0; }
+            th { background: #f1f5f9; color: #475569; text-align: left; padding: 11px; font-size: 10px; text-transform: uppercase; letter-spacing: .8px; }
+            td { border-top: 1px solid #e2e8f0; padding: 12px; font-size: 12px; vertical-align: top; }
+            .right { text-align: right; }
+            .total { margin-left: auto; margin-top: 16px; width: 310px; background: #0f766e; color: white; border-radius: 14px; padding: 16px; display: flex; justify-content: space-between; font-weight: 900; }
+            .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 46px; margin-top: 62px; }
+            .line { border-top: 1px solid #64748b; padding-top: 10px; text-align: center; font-size: 12px; color: #475569; }
+            footer { margin-top: 30px; padding-top: 14px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 10px; text-align: center; }
+            @page { size: A4; margin: 0; }
+            @media print {
+              body { background: white; }
+              .toolbar { display: none; }
+              .page { margin: 0; box-shadow: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="toolbar"><button onclick="window.print()">Imprimir / Salvar PDF</button></div>
+          <main class="page">
+            <header>
+              <div>
+                <h1>Termo de Aceite e Contratação</h1>
+                <p class="muted">Referente à proposta comercial nº ${escapeHtml(proposal.proposalNumber)}</p>
+              </div>
+              <div style="text-align:right">
+                <p><strong>Data:</strong> ${escapeHtml(contractDate)}</p>
+                <p><strong>Valor:</strong> ${escapeHtml(formatCurrency(proposal.total))}</p>
+              </div>
+            </header>
+
+            <section class="grid">
+              <div class="box">
+                <h2>Contratada</h2>
+                <p><strong>${escapeHtml(officeProfile?.name || proposal.company || 'Escritório')}</strong></p>
+                <p>${escapeHtml(officeProfile?.cnpj || 'CNPJ/Registro não informado')}</p>
+                <p>${escapeHtml(officeProfile?.email || '')}${officeProfile?.phone ? ` • ${escapeHtml(officeProfile.phone)}` : ''}</p>
+                <p>${escapeHtml(officeAddress || 'Endereço não informado')}</p>
+              </div>
+              <div class="box">
+                <h2>Contratante</h2>
+                <p><strong>${escapeHtml(proposal.client)}</strong></p>
+                <p>Projeto/obra: ${escapeHtml(proposal.projetoNome || 'Geral')}</p>
+                <p>Dados complementares deverão ser confirmados no cadastro do cliente.</p>
+              </div>
+            </section>
+
+            <h2>1. Objeto</h2>
+            <p>O presente termo formaliza o aceite da proposta comercial nº ${escapeHtml(proposal.proposalNumber)}, cujo escopo contempla os serviços e entregáveis descritos abaixo.</p>
+
+            <h2>2. Escopo Contratado</h2>
+            <table>
+              <thead>
+                <tr><th>#</th><th>Descrição</th><th class="right">Valor</th></tr>
+              </thead>
+              <tbody>${itemsRows}</tbody>
+            </table>
+            <div class="total"><span>Valor total contratado</span><span>${escapeHtml(formatCurrency(proposal.total))}</span></div>
+
+            <h2>3. Condições de Pagamento</h2>
+            <p>${escapeHtml(proposal.paymentTerms || 'As condições de pagamento serão acordadas entre as partes.')}</p>
+
+            <h2>4. Prazos, Premissas e Responsabilidades</h2>
+            <p>${escapeHtml(proposal.deliveryTerms || 'Os prazos dependem da aprovação do escopo, disponibilidade de informações, medições e retorno do contratante.')}</p>
+            <ul>
+              <li>Alterações de escopo, materiais, metragens ou premissas poderão gerar revisão de prazo e valor.</li>
+              <li>O início dos serviços depende do aceite deste termo e do cumprimento da condição inicial de pagamento, quando aplicável.</li>
+              <li>Este termo não substitui exigências legais específicas, ART/RRT ou contratos complementares quando forem necessários.</li>
+            </ul>
+
+            <h2>5. Observações</h2>
+            <p>${escapeHtml(proposal.notes || 'Sem observações adicionais.')}</p>
+
+            <h2>6. Aceite</h2>
+            <p>Ao assinar este termo, as partes declaram ciência e concordância com o escopo, valores, condições comerciais e premissas descritas.</p>
+
+            <div class="signatures">
+              <div class="line">${escapeHtml(officeProfile?.name || proposal.company || 'Contratada')}</div>
+              <div class="line">${escapeHtml(proposal.client)}<br/>Contratante</div>
+            </div>
+
+            <footer>Documento gerado pelo PrecificaPro em ${escapeHtml(contractDate)}.</footer>
+          </main>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
   const handleSaveProposal = async (e: React.FormEvent) => {
     e.preventDefault();
     const total = formData.items.reduce((acc: number, item: any) => acc + (item.quantity * item.unitPrice), 0);
@@ -984,6 +1107,12 @@ const ProposalsPage: React.FC = () => {
                 <Clipboard size={15} /> Copiar
               </button>
             </div>
+            <button
+              onClick={(e) => handleViewContract(p, e)}
+              className="mt-2 w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:opacity-90 flex items-center justify-center gap-2"
+            >
+              <FileSignature size={16} /> Contrato / Aceite
+            </button>
             <button
               onClick={(e) => handleApproveAndCreateProject(p, e)}
               className="mt-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
