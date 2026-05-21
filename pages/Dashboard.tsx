@@ -37,11 +37,23 @@ const Dashboard: React.FC = () => {
    const navigate = useNavigate();
    const { user } = useAuth();
    const [projects, setProjects] = useState<any[]>([]);
+   const [clients, setClients] = useState<any[]>([]);
    const [loading, setLoading] = useState(true);
    const [totalReceita, setTotalReceita] = useState(0);
    const [totalGastos, setTotalGastos] = useState(0);
    const [proposalCount, setProposalCount] = useState(0);
    const [recentProposals, setRecentProposals] = useState<any[]>([]);
+   const [commercialStats, setCommercialStats] = useState({
+      totalLeads: 0,
+      leadsNovo: 0,
+      emBriefing: 0,
+      propostasEnviadas: 0,
+      contratados: 0,
+      perdidos: 0,
+      valorPropostasAbertas: 0,
+      valorAprovado: 0,
+      conversao: 0,
+   });
 
    useEffect(() => {
       if (user) fetchDashboardData();
@@ -49,14 +61,18 @@ const Dashboard: React.FC = () => {
 
    const fetchDashboardData = async () => {
       setLoading(true);
+      const { data: clientsData } = await supabase
+         .from('clients')
+         .select('id, nome, status, briefing, created_at')
+         .order('created_at', { ascending: false });
+
       const { data: projectsData } = await supabase
          .from('projects')
          .select('*, clients (nome)')
-         .order('created_at', { ascending: false })
-         .limit(3);
+         .order('created_at', { ascending: false });
 
       if (projectsData) {
-         setProjects(projectsData.map(p => ({
+         setProjects(projectsData.slice(0, 3).map(p => ({
             id: p.id,
             name: p.name,
             client: p.clients?.nome || 'Geral',
@@ -69,10 +85,36 @@ const Dashboard: React.FC = () => {
          setTotalGastos(projectsData.reduce((a, p) => a + Number(p.spent_amount), 0));
       }
 
-      const { count } = await supabase.from('proposals').select('*', { count: 'exact', head: true }).eq('status', 'draft');
-      const { data: proposalsData } = await supabase.from('proposals').select('*').order('created_at', { ascending: false }).limit(3);
-      setProposalCount(count || 0);
-      if (proposalsData) setRecentProposals(proposalsData);
+      const { data: proposalsData } = await supabase
+         .from('proposals')
+         .select('id, proposal_number, client_name, project_name, total, status, created_at')
+         .order('created_at', { ascending: false });
+
+      const safeClients = clientsData || [];
+      const safeProposals = proposalsData || [];
+      const totalLeads = safeClients.length;
+      const contratados = safeClients.filter(c => c.status === 'contratado').length;
+      const perdidos = safeClients.filter(c => c.status === 'perdido').length;
+      const oportunidadesFinalizadas = contratados + perdidos;
+
+      setClients(safeClients);
+      setProposalCount(safeProposals.filter(p => p.status === 'sent' || p.status === 'draft').length);
+      setRecentProposals(safeProposals.slice(0, 3));
+      setCommercialStats({
+         totalLeads,
+         leadsNovo: safeClients.filter(c => c.status === 'novo').length,
+         emBriefing: safeClients.filter(c => c.status === 'em_briefing').length,
+         propostasEnviadas: safeClients.filter(c => c.status === 'proposta_enviada').length,
+         contratados,
+         perdidos,
+         valorPropostasAbertas: safeProposals
+            .filter(p => p.status === 'sent' || p.status === 'draft')
+            .reduce((sum, proposal) => sum + Number(proposal.total || 0), 0),
+         valorAprovado: safeProposals
+            .filter(p => p.status === 'approved')
+            .reduce((sum, proposal) => sum + Number(proposal.total || 0), 0),
+         conversao: oportunidadesFinalizadas > 0 ? Math.round((contratados / oportunidadesFinalizadas) * 100) : 0,
+      });
       setLoading(false);
    };
 
@@ -106,17 +148,109 @@ const Dashboard: React.FC = () => {
                   <p className="text-teal-100 text-[10px] font-bold mt-1 uppercase tracking-wide">Obras</p>
                </div>
                <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
-                  <p className="text-white font-black text-lg leading-none">{proposalCount}</p>
-                  <p className="text-teal-100 text-[10px] font-bold mt-1 uppercase tracking-wide">Propostas</p>
+                  <p className="text-white font-black text-lg leading-none">{commercialStats.totalLeads}</p>
+                  <p className="text-teal-100 text-[10px] font-bold mt-1 uppercase tracking-wide">Leads</p>
                </div>
                <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
                   <p className="text-white font-black text-base leading-none">
-                     {totalReceita > 0 ? `${Math.round((totalGastos / totalReceita) * 100)}%` : '0%'}
+                     {commercialStats.conversao}%
                   </p>
-                  <p className="text-teal-100 text-[10px] font-bold mt-1 uppercase tracking-wide">Exec.</p>
+                  <p className="text-teal-100 text-[10px] font-bold mt-1 uppercase tracking-wide">Conversão</p>
                </div>
             </div>
          </div>
+
+         {/* ── Dashboard Comercial ── */}
+         <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+            <div className="flex items-center justify-between gap-4 mb-5">
+               <div>
+                  <h2 className="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest flex items-center gap-2">
+                     <Users size={16} className="text-teal-600" /> Dashboard Comercial
+                  </h2>
+                  <p className="text-xs font-bold text-gray-400 mt-1">Funil de leads, propostas e oportunidades em andamento.</p>
+               </div>
+               <button
+                  onClick={() => navigate('/registrations')}
+                  className="px-4 py-2 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-600 hover:text-white transition-all"
+               >
+                  Ver leads
+               </button>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+               <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-300">Lead novo</p>
+                  <p className="text-2xl font-black text-gray-900 dark:text-white mt-1">{commercialStats.leadsNovo}</p>
+               </div>
+               <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Em briefing</p>
+                  <p className="text-2xl font-black text-gray-900 dark:text-white mt-1">{commercialStats.emBriefing}</p>
+               </div>
+               <div className="p-4 rounded-2xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-900/30">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-300">Proposta enviada</p>
+                  <p className="text-2xl font-black text-gray-900 dark:text-white mt-1">{commercialStats.propostasEnviadas}</p>
+               </div>
+               <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300">Contratados</p>
+                  <p className="text-2xl font-black text-gray-900 dark:text-white mt-1">{commercialStats.contratados}</p>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+               <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor em aberto</p>
+                  <p className="text-xl font-black text-gray-900 dark:text-white mt-1">R$ {commercialStats.valorPropostasAbertas.toLocaleString('pt-BR')}</p>
+                  <p className="text-[10px] font-bold text-violet-500 mt-1">{proposalCount} proposta(s) em negociação</p>
+               </div>
+               <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor aprovado</p>
+                  <p className="text-xl font-black text-gray-900 dark:text-white mt-1">R$ {commercialStats.valorAprovado.toLocaleString('pt-BR')}</p>
+                  <p className="text-[10px] font-bold text-emerald-500 mt-1">Receita comercial contratada</p>
+               </div>
+               <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Conversão</p>
+                  <p className="text-xl font-black text-gray-900 dark:text-white mt-1">{commercialStats.conversao}%</p>
+                  <p className="text-[10px] font-bold text-teal-500 mt-1">{commercialStats.perdidos} oportunidade(s) perdida(s)</p>
+               </div>
+            </div>
+         </div>
+
+         {(clients.some(c => !c.briefing?.objetivo) || commercialStats.propostasEnviadas > 0) && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+               <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest flex items-center gap-2">
+                     <AlertTriangle size={16} className="text-amber-500" /> Próximas Ações
+                  </h2>
+               </div>
+               <div className="space-y-3">
+                  {clients.filter(c => !c.briefing?.objetivo).slice(0, 2).map((client) => (
+                     <button
+                        key={client.id}
+                        onClick={() => navigate('/registrations')}
+                        className="w-full flex items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-2xl text-left"
+                     >
+                        <div>
+                           <p className="text-sm font-black text-gray-900 dark:text-white">{client.nome}</p>
+                           <p className="text-[10px] font-bold text-amber-600 dark:text-amber-300 uppercase tracking-widest">Briefing pendente</p>
+                        </div>
+                        <ChevronRight size={18} className="text-amber-500" />
+                     </button>
+                  ))}
+                  {commercialStats.propostasEnviadas > 0 && (
+                     <button
+                        onClick={() => navigate('/proposals')}
+                        className="w-full flex items-center justify-between gap-4 p-4 bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-900/30 rounded-2xl text-left"
+                     >
+                        <div>
+                           <p className="text-sm font-black text-gray-900 dark:text-white">{commercialStats.propostasEnviadas} proposta(s) aguardando retorno</p>
+                           <p className="text-[10px] font-bold text-violet-600 dark:text-violet-300 uppercase tracking-widest">Fazer follow-up comercial</p>
+                        </div>
+                        <ChevronRight size={18} className="text-violet-500" />
+                     </button>
+                  )}
+               </div>
+            </div>
+         )}
 
          {/* ── Módulos (grid de ícones) ── */}
          <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm">
@@ -249,7 +383,7 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                            <p className="text-sm font-black text-gray-900 dark:text-white capitalize truncate">{p.client_name}</p>
-                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">R$ {Number(p.total_amount).toLocaleString('pt-BR')}</p>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">R$ {Number(p.total || 0).toLocaleString('pt-BR')}</p>
                         </div>
                         <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${
                            p.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
