@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, FileText, LoaderCircle, Printer, ShieldCheck } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 
@@ -51,6 +51,7 @@ const PublicProposalPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const viewedTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     fetchProposal();
@@ -71,9 +72,29 @@ const PublicProposalPage: React.FC = () => {
     } else {
       setProposal(data as PublicProposal);
       setSignerName((data as PublicProposal).client || '');
+      if (viewedTokenRef.current !== token) {
+        viewedTokenRef.current = token;
+        await recordPublicEvent('public_viewed', 'Proposta visualizada pelo cliente', 'Link publico aberto pelo cliente.');
+      }
     }
 
     setLoading(false);
+  };
+
+  const recordPublicEvent = async (eventType: string, title: string, details?: string, metadata: Record<string, any> = {}) => {
+    if (!token) return;
+
+    const { error } = await supabase.rpc('record_public_proposal_event', {
+      proposal_token: token,
+      event_type_to_record: eventType,
+      event_title: title,
+      event_details: details || null,
+      event_metadata: metadata
+    });
+
+    if (error) {
+      console.warn('Could not record public proposal event:', error.message);
+    }
   };
 
   const subtotal = useMemo(() => {
@@ -134,6 +155,12 @@ const PublicProposalPage: React.FC = () => {
     if (error || !data?.ok) {
       setMessage({ type: 'error', text: error?.message || data?.message || 'Nao foi possivel aprovar a proposta.' });
     } else {
+      await recordPublicEvent(
+        'accepted_public',
+        'Proposta aprovada pelo cliente',
+        signerEmail.trim() ? `Aceite informado por ${signerName.trim()} (${signerEmail.trim()}).` : `Aceite informado por ${signerName.trim()}.`,
+        { signerName: signerName.trim(), signerEmail: signerEmail.trim() || null }
+      );
       setMessage({ type: 'success', text: 'Proposta aprovada com sucesso. O escritorio ja pode dar sequencia ao projeto.' });
       await fetchProposal();
     }

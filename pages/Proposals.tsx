@@ -3,6 +3,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Clipboard,
+  Clock3,
   FileSignature,
   Hammer,
   Link2,
@@ -51,6 +52,16 @@ interface Proposal {
   acceptanceMethod?: string;
   acceptanceNotes?: string;
   publicToken?: string;
+  events?: ProposalEvent[];
+}
+
+interface ProposalEvent {
+  id: string;
+  type: string;
+  title: string;
+  details?: string;
+  actorType: 'user' | 'client' | 'system';
+  createdAt: string;
 }
 
 interface OfficeProfile {
@@ -218,7 +229,7 @@ const ProposalsPage: React.FC = () => {
     if (error) {
       console.error('Error fetching proposals:', error);
     } else {
-      setProposals((data || []).map(p => ({
+      const mappedProposals = (data || []).map(p => ({
         id: p.id,
         clientId: p.client_id,
         projectId: p.project_id,
@@ -242,9 +253,46 @@ const ProposalsPage: React.FC = () => {
           category: item.category
         })),
         ...parseProposalNotes(p.observacoes)
-      })));
+      }));
+
+      setProposals(mappedProposals);
+      await fetchProposalEvents(mappedProposals.map((proposal: Proposal) => proposal.id));
     }
     setLoading(false);
+  };
+
+  const fetchProposalEvents = async (proposalIds: string[]) => {
+    if (!proposalIds.length) return;
+
+    const { data, error } = await supabase
+      .from('proposal_events')
+      .select('id, proposal_id, event_type, title, details, actor_type, created_at')
+      .in('proposal_id', proposalIds)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Proposal audit events unavailable:', error.message);
+      return;
+    }
+
+    const eventsByProposal = (data || []).reduce((acc: Record<string, ProposalEvent[]>, event: any) => {
+      const proposalId = event.proposal_id;
+      acc[proposalId] = acc[proposalId] || [];
+      acc[proposalId].push({
+        id: event.id,
+        type: event.event_type,
+        title: event.title,
+        details: event.details || '',
+        actorType: event.actor_type || 'system',
+        createdAt: event.created_at
+      });
+      return acc;
+    }, {});
+
+    setProposals((current) => current.map((proposal) => ({
+      ...proposal,
+      events: eventsByProposal[proposal.id] || []
+    })));
   };
 
   const fetchProjects = async () => {
@@ -397,6 +445,86 @@ const ProposalsPage: React.FC = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const formatTimelineDate = (date?: string) => {
+    if (!date) return '';
+    return new Date(date).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const recordProposalEvent = async (
+    proposalId: string,
+    eventType: string,
+    title: string,
+    details?: string,
+    metadata: Record<string, any> = {},
+    actorType: ProposalEvent['actorType'] = 'user'
+  ) => {
+    if (!user?.id || !proposalId) return;
+
+    const { error } = await supabase.from('proposal_events').insert([{
+      user_id: user.id,
+      proposal_id: proposalId,
+      event_type: eventType,
+      title,
+      details: details || null,
+      actor_type: actorType,
+      metadata
+    }]);
+
+    if (error) {
+      console.warn('Could not record proposal event:', error.message);
+    }
+  };
+
+  const getProposalTimeline = (proposal: Proposal): ProposalEvent[] => {
+    const syntheticEvents: ProposalEvent[] = [
+      {
+        id: `${proposal.id}-created`,
+        type: 'created',
+        title: 'Proposta criada',
+        details: proposal.proposalNumber,
+        actorType: 'system',
+        createdAt: proposal.createdAt
+      }
+    ];
+
+    if (proposal.publicToken) {
+      syntheticEvents.push({
+        id: `${proposal.id}-public-link`,
+        type: 'public_link_created',
+        title: 'Link do cliente ativo',
+        details: 'Portal publico disponivel para envio',
+        actorType: 'system',
+        createdAt: proposal.createdAt
+      });
+    }
+
+    if (proposal.acceptedAt) {
+      syntheticEvents.push({
+        id: `${proposal.id}-accepted`,
+        type: proposal.acceptanceMethod === 'public_link' ? 'accepted_public' : 'accepted_internal',
+        title: proposal.acceptanceMethod === 'public_link' ? 'Aceite pelo portal publico' : 'Aceite interno registrado',
+        details: proposal.acceptedBy || proposal.client,
+        actorType: proposal.acceptanceMethod === 'public_link' ? 'client' : 'user',
+        createdAt: proposal.acceptedAt
+      });
+    }
+
+    const eventMap = new Map<string, ProposalEvent>();
+    [...syntheticEvents, ...(proposal.events || [])].forEach((event) => {
+      const key = `${event.type}-${event.createdAt}-${event.title}`;
+      eventMap.set(key, event);
+    });
+
+    return Array.from(eventMap.values())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
   };
 
   const getOfficeAddress = () => {
@@ -761,6 +889,14 @@ const ProposalsPage: React.FC = () => {
           .eq('id', formData.clientId);
       }
 
+      await recordProposalEvent(
+        proposal.id,
+        'created',
+        'Proposta criada',
+        `Proposta ${formData.proposalNumber} criada para ${formData.client}.`,
+        { total }
+      );
+
       await fetchProposals();
       setShowFormModal(false);
       setMessage({ text: 'Proposta criada e lead movido para Proposta enviada.', type: 'success' });
@@ -833,6 +969,13 @@ const ProposalsPage: React.FC = () => {
     const summary = buildShareSummary(proposal);
     try {
       await navigator.clipboard.writeText(summary);
+      await recordProposalEvent(
+        proposal.id,
+        'summary_copied',
+        'Resumo copiado',
+        'Resumo comercial copiado para envio manual.',
+        { proposalNumber: proposal.proposalNumber }
+      );
       setMessage({ text: 'Resumo da proposta copiado.', type: 'success' });
     } catch {
       setMessage({ text: 'Não foi possível copiar automaticamente. Abra a proposta e copie manualmente.', type: 'error' });
@@ -849,6 +992,13 @@ const ProposalsPage: React.FC = () => {
       return;
     }
 
+    recordProposalEvent(
+      proposal.id,
+      'sent_whatsapp',
+      'Proposta enviada por WhatsApp',
+      `Mensagem preparada para ${proposal.clientPhone}.`,
+      { proposalNumber: proposal.proposalNumber }
+    );
     window.open(createWhatsappLink(proposal.clientPhone, buildShareSummary(proposal)), '_blank');
   };
 
@@ -891,10 +1041,25 @@ const ProposalsPage: React.FC = () => {
       setProposals((current) => current.map((item) => (
         item.id === proposal.id ? { ...item, publicToken } : item
       )));
+
+      await recordProposalEvent(
+        proposal.id,
+        'public_link_created',
+        'Link do cliente criado',
+        'Portal publico da proposta foi habilitado.',
+        { publicToken }
+      );
     }
 
     try {
       await navigator.clipboard.writeText(getPublicProposalUrl(publicToken));
+      await recordProposalEvent(
+        proposal.id,
+        'public_link_copied',
+        'Link do cliente copiado',
+        'Link publico copiado para envio ao cliente.',
+        { publicToken }
+      );
       setMessage({ text: 'Link publico da proposta copiado.', type: 'success' });
     } catch {
       setMessage({ text: getPublicProposalUrl(publicToken), type: 'success' });
@@ -963,6 +1128,14 @@ const ProposalsPage: React.FC = () => {
         .eq('id', proposal.clientId);
     }
 
+    await recordProposalEvent(
+      proposal.id,
+      'accepted_internal',
+      'Aceite interno registrado',
+      `Aceite registrado por ${proposal.client}.`,
+      { acceptedBy: proposal.client }
+    );
+
     await fetchProposals();
     setMessage({ text: 'Aceite registrado e lead marcado como contratado.', type: 'success' });
     setTimeout(() => setMessage(null), 3500);
@@ -1018,6 +1191,14 @@ const ProposalsPage: React.FC = () => {
         .update({ status: 'contratado' })
         .eq('id', proposal.clientId);
     }
+
+    await recordProposalEvent(
+      proposal.id,
+      'converted_to_project',
+      'Proposta convertida em obra',
+      `Obra criada para ${proposal.client}.`,
+      { projectId }
+    );
 
     await fetchProposals();
     setMessage({ text: 'Proposta aprovada e obra criada com sucesso.', type: 'success' });
@@ -1098,6 +1279,15 @@ const ProposalsPage: React.FC = () => {
       setTimeout(() => setMessage(null), 4500);
       return;
     }
+
+    await recordProposalEvent(
+      proposal.id,
+      'demo_created',
+      'Proposta demo criada',
+      'Registro demonstrativo criado para apresentacao.',
+      { proposalNumber: demoNumber },
+      'system'
+    );
 
     await fetchProposals();
     setMessage({ text: 'Proposta demo criada. Clique no card para visualizar o PDF apresentável.', type: 'success' });
@@ -1228,6 +1418,32 @@ const ProposalsPage: React.FC = () => {
                 <p className="mt-1 text-xs font-bold">{formatDateTime(p.acceptedAt)}</p>
               </div>
             )}
+            <div className="mb-6 rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950/70">
+              <div className="mb-3 flex items-center gap-2">
+                <Clock3 size={14} className="text-teal-500" />
+                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Histórico comercial</p>
+              </div>
+              <div className="space-y-3">
+                {getProposalTimeline(p).map((event) => (
+                  <div key={event.id} className="grid grid-cols-[10px_1fr] gap-3">
+                    <span className={`mt-1.5 h-2.5 w-2.5 rounded-full ${
+                      event.actorType === 'client'
+                        ? 'bg-emerald-400'
+                        : event.actorType === 'user'
+                          ? 'bg-teal-400'
+                          : 'bg-gray-400'
+                    }`} />
+                    <div>
+                      <p className="text-xs font-black text-gray-900 dark:text-white">{event.title}</p>
+                      <p className="text-[10px] font-bold text-gray-400">
+                        {formatTimelineDate(event.createdAt)}
+                        {event.details ? ` - ${event.details}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div className="flex items-center justify-between pt-6 border-t border-gray-50 dark:border-gray-800">
               <div>
