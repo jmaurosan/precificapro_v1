@@ -2,7 +2,9 @@
 import {
   ChevronRight,
   CheckCircle2,
+  Clipboard,
   Hammer,
+  MessageCircle,
   Plus,
   Search,
   Trash2,
@@ -12,6 +14,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
+import { createWhatsappLink } from '../utils/whatsapp';
 
 interface ProposalItem {
   id: string;
@@ -29,6 +32,7 @@ interface Proposal {
   proposalNumber: string;
   proposalDate: string;
   client: string;
+  clientPhone?: string;
   company: string;
   projetoNome: string;
   total: number;
@@ -199,6 +203,7 @@ const ProposalsPage: React.FC = () => {
       .select(`
         *,
         projects (name),
+        clients (telefones),
         proposal_items (*)
       `)
       .order('created_at', { ascending: false });
@@ -213,6 +218,7 @@ const ProposalsPage: React.FC = () => {
         proposalNumber: p.proposal_number,
         proposalDate: p.proposal_date,
         client: p.client_name,
+        clientPhone: p.clients?.telefones?.whatsapp || p.clients?.telefones?.celular || '',
         company: user?.company || 'Individual',
         projetoNome: p.projects?.name || p.project_name || 'Geral',
         total: Number(p.total || 0),
@@ -631,6 +637,54 @@ const ProposalsPage: React.FC = () => {
     });
   };
 
+  const buildShareSummary = (proposal: Proposal) => {
+    const validUntil = new Date(`${proposal.proposalDate}T00:00:00`);
+    validUntil.setDate(validUntil.getDate() + (proposal.validityDays || 15));
+
+    const items = proposal.items
+      .slice(0, 5)
+      .map((item) => `- ${item.description}: ${formatCurrency(item.quantity * item.unitPrice)}`)
+      .join('\n');
+
+    return [
+      `Olá ${proposal.client}, tudo bem?`,
+      '',
+      `Segue o resumo da proposta ${proposal.proposalNumber} para ${proposal.projetoNome || 'seu projeto'}.`,
+      '',
+      items,
+      '',
+      `Investimento total: ${formatCurrency(proposal.total)}`,
+      `Validade: ${validUntil.toLocaleDateString('pt-BR')}`,
+      '',
+      'Posso te apresentar os detalhes e próximos passos?'
+    ].join('\n');
+  };
+
+  const handleCopyProposalSummary = async (proposal: Proposal, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    const summary = buildShareSummary(proposal);
+    try {
+      await navigator.clipboard.writeText(summary);
+      setMessage({ text: 'Resumo da proposta copiado.', type: 'success' });
+    } catch {
+      setMessage({ text: 'Não foi possível copiar automaticamente. Abra a proposta e copie manualmente.', type: 'error' });
+    }
+    setTimeout(() => setMessage(null), 3500);
+  };
+
+  const handleSendProposalWhatsapp = (proposal: Proposal, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!proposal.clientPhone) {
+      setMessage({ text: 'Este cliente não tem WhatsApp cadastrado. Use Copiar resumo.', type: 'error' });
+      setTimeout(() => setMessage(null), 4000);
+      return;
+    }
+
+    window.open(createWhatsappLink(proposal.clientPhone, buildShareSummary(proposal)), '_blank');
+  };
+
   const handleApplyTemplate = (templateId: string) => {
     const template = proposalTemplates.find((item) => item.id === templateId);
     if (!template) return;
@@ -916,9 +970,23 @@ const ProposalsPage: React.FC = () => {
                 <ChevronRight size={20} />
               </button>
             </div>
+            <div className="grid grid-cols-2 gap-2 mt-5">
+              <button
+                onClick={(e) => handleSendProposalWhatsapp(p, e)}
+                className="py-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-emerald-600 hover:text-white flex items-center justify-center gap-2"
+              >
+                <MessageCircle size={15} /> WhatsApp
+              </button>
+              <button
+                onClick={(e) => handleCopyProposalSummary(p, e)}
+                className="py-3 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-gray-900 hover:text-white dark:hover:bg-white dark:hover:text-gray-900 flex items-center justify-center gap-2"
+              >
+                <Clipboard size={15} /> Copiar
+              </button>
+            </div>
             <button
               onClick={(e) => handleApproveAndCreateProject(p, e)}
-              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+              className="mt-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
             >
               <CheckCircle2 size={16} /> {p.status === 'approved' ? 'Abrir Obra' : 'Aprovar e Virar Obra'}
             </button>
