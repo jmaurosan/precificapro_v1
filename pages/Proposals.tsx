@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
   X
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
@@ -53,6 +54,7 @@ interface Proposal {
   acceptanceNotes?: string;
   publicToken?: string;
   events?: ProposalEvent[];
+  contracts?: ProposalContractFile[];
 }
 
 interface ProposalEvent {
@@ -62,6 +64,17 @@ interface ProposalEvent {
   details?: string;
   actorType: 'user' | 'client' | 'system';
   createdAt: string;
+}
+
+interface ProposalContractFile {
+  id: string;
+  fileName: string;
+  filePath: string;
+  fileType?: string;
+  fileSize: number;
+  status: 'draft' | 'sent' | 'signed' | 'cancelled';
+  uploadedAt: string;
+  notes?: string;
 }
 
 interface OfficeProfile {
@@ -160,7 +173,8 @@ const ProposalsPage: React.FC = () => {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [officeProfile, setOfficeProfile] = useState<OfficeProfile | null>(null);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
-  const [detailsTab, setDetailsTab] = useState<'summary' | 'items' | 'history' | 'actions'>('summary');
+  const [detailsTab, setDetailsTab] = useState<'summary' | 'items' | 'history' | 'contracts' | 'actions'>('summary');
+  const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -259,6 +273,7 @@ const ProposalsPage: React.FC = () => {
 
       setProposals(mappedProposals);
       await fetchProposalEvents(mappedProposals.map((proposal: Proposal) => proposal.id));
+      await fetchProposalContracts(mappedProposals.map((proposal: Proposal) => proposal.id));
     }
     setLoading(false);
   };
@@ -294,6 +309,42 @@ const ProposalsPage: React.FC = () => {
     setProposals((current) => current.map((proposal) => ({
       ...proposal,
       events: eventsByProposal[proposal.id] || []
+    })));
+  };
+
+  const fetchProposalContracts = async (proposalIds: string[]) => {
+    if (!proposalIds.length) return;
+
+    const { data, error } = await supabase
+      .from('proposal_contract_files')
+      .select('id, proposal_id, file_name, file_path, file_type, file_size, status, uploaded_at, notes')
+      .in('proposal_id', proposalIds)
+      .order('uploaded_at', { ascending: false });
+
+    if (error) {
+      console.warn('Proposal contract files unavailable:', error.message);
+      return;
+    }
+
+    const contractsByProposal = (data || []).reduce((acc: Record<string, ProposalContractFile[]>, file: any) => {
+      const proposalId = file.proposal_id;
+      acc[proposalId] = acc[proposalId] || [];
+      acc[proposalId].push({
+        id: file.id,
+        fileName: file.file_name,
+        filePath: file.file_path,
+        fileType: file.file_type || '',
+        fileSize: Number(file.file_size || 0),
+        status: file.status || 'signed',
+        uploadedAt: file.uploaded_at,
+        notes: file.notes || ''
+      });
+      return acc;
+    }, {});
+
+    setProposals((current) => current.map((proposal) => ({
+      ...proposal,
+      contracts: contractsByProposal[proposal.id] || []
     })));
   };
 
@@ -449,6 +500,20 @@ const ProposalsPage: React.FC = () => {
     });
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (!bytes) return '0 KB';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+  };
+
+  const sanitizeFileName = (fileName: string) => fileName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+
   const formatTimelineDate = (date?: string) => {
     if (!date) return '';
     return new Date(date).toLocaleDateString('pt-BR', {
@@ -517,6 +582,17 @@ const ProposalsPage: React.FC = () => {
         createdAt: proposal.acceptedAt
       });
     }
+
+    (proposal.contracts || []).forEach((contract) => {
+      syntheticEvents.push({
+        id: `${proposal.id}-contract-${contract.id}`,
+        type: 'signed_contract_uploaded',
+        title: 'Contrato assinado anexado',
+        details: contract.fileName,
+        actorType: 'user',
+        createdAt: contract.uploadedAt
+      });
+    });
 
     const eventMap = new Map<string, ProposalEvent>();
     [...syntheticEvents, ...(proposal.events || [])].forEach((event) => {
@@ -1207,6 +1283,92 @@ const ProposalsPage: React.FC = () => {
     setTimeout(() => setMessage(null), 3500);
   };
 
+  const handleSignedContractUpload = async (proposal: Proposal, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user?.id) return;
+
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage({ text: 'Envie um PDF ou imagem PNG/JPG/WebP do contrato assinado.', type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage({ text: 'Arquivo muito grande. O limite para contrato assinado é 10MB.', type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    setUploadingContractId(proposal.id);
+    const filePath = `${user.id}/${proposal.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
+    const { error: uploadError } = await supabase.storage
+      .from('proposal-contracts')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      setUploadingContractId(null);
+      setMessage({
+        text: 'Erro ao enviar contrato. Aplique a migration 00005_proposal_signed_contracts.sql no Supabase e tente novamente.',
+        type: 'error'
+      });
+      setTimeout(() => setMessage(null), 6500);
+      return;
+    }
+
+    const { error: metadataError } = await supabase
+      .from('proposal_contract_files')
+      .insert([{
+        user_id: user.id,
+        proposal_id: proposal.id,
+        file_name: file.name,
+        file_path: filePath,
+        file_type: file.type,
+        file_size: file.size,
+        status: 'signed',
+        notes: 'Contrato assinado anexado ao dossiê da proposta.'
+      }]);
+
+    if (metadataError) {
+      await supabase.storage.from('proposal-contracts').remove([filePath]);
+      setUploadingContractId(null);
+      setMessage({ text: 'Arquivo enviado, mas houve erro ao registrar no histórico: ' + metadataError.message, type: 'error' });
+      setTimeout(() => setMessage(null), 6500);
+      return;
+    }
+
+    await recordProposalEvent(
+      proposal.id,
+      'signed_contract_uploaded',
+      'Contrato assinado anexado',
+      file.name,
+      { fileName: file.name, fileSize: file.size, fileType: file.type }
+    );
+
+    await fetchProposals();
+    setUploadingContractId(null);
+    setMessage({ text: 'Contrato assinado anexado com sucesso.', type: 'success' });
+    setTimeout(() => setMessage(null), 4000);
+  };
+
+  const handleOpenSignedContract = async (contract: ProposalContractFile) => {
+    const { data, error } = await supabase.storage
+      .from('proposal-contracts')
+      .createSignedUrl(contract.filePath, 60);
+
+    if (error || !data?.signedUrl) {
+      setMessage({ text: 'Não foi possível abrir o contrato assinado: ' + (error?.message || 'link indisponível'), type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    window.open(data.signedUrl, '_blank');
+  };
+
   const handleCreateDemoProposal = async () => {
     if (!user?.id) return;
 
@@ -1346,6 +1508,7 @@ const ProposalsPage: React.FC = () => {
     { id: 'summary', label: 'Resumo' },
     { id: 'items', label: 'Itens' },
     { id: 'history', label: 'Histórico' },
+    { id: 'contracts', label: 'Contrato' },
     { id: 'actions', label: 'Ações' }
   ];
 
@@ -1673,6 +1836,74 @@ const ProposalsPage: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {detailsTab === 'contracts' && (
+                <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+                  <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Dossiê da proposta</p>
+                        <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Contrato assinado</h3>
+                        <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Anexe o PDF ou imagem do contrato/termo assinado pelo cliente.</p>
+                      </div>
+                      <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black uppercase tracking-widest text-white transition hover:bg-teal-700">
+                        <Upload size={17} />
+                        {uploadingContractId === selectedProposal.id ? 'Enviando...' : 'Anexar'}
+                        <input
+                          type="file"
+                          accept="application/pdf,image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          disabled={uploadingContractId === selectedProposal.id}
+                          onChange={(e) => handleSignedContractUpload(selectedProposal, e)}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-6 space-y-3">
+                      {(selectedProposal.contracts || []).length ? (
+                        selectedProposal.contracts?.map((contract) => (
+                          <div key={contract.id} className="flex flex-col gap-4 rounded-3xl border border-gray-100 bg-white p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-gray-950">
+                            <div className="min-w-0">
+                              <p className="truncate font-black text-gray-900 dark:text-white">{contract.fileName}</p>
+                              <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                {formatFileSize(contract.fileSize)} - {formatDateTime(contract.uploadedAt)}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleOpenSignedContract(contract)}
+                              className="rounded-2xl bg-gray-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:opacity-90 dark:bg-white dark:text-gray-950"
+                            >
+                              Abrir arquivo
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-950">
+                          <FileSignature size={34} className="mx-auto text-gray-300" />
+                          <p className="mt-4 font-black text-gray-900 dark:text-white">Nenhum contrato assinado anexado</p>
+                          <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Use o botão Anexar para guardar o documento final da negociação.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <aside className="rounded-[32px] border border-emerald-100 bg-emerald-50 p-6 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Status documental</p>
+                    <p className="mt-3 text-2xl font-black text-gray-900 dark:text-white">
+                      {(selectedProposal.contracts || []).length ? 'Contrato arquivado' : 'Pendente'}
+                    </p>
+                    <p className="mt-3 text-sm font-semibold leading-6 text-gray-600 dark:text-gray-300">
+                      O arquivo fica em bucket privado no Supabase e só usuários autorizados do escritório conseguem abrir por link temporário.
+                    </p>
+                    <button
+                      onClick={() => handleViewContract(selectedProposal)}
+                      className="mt-6 w-full rounded-2xl bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-emerald-700 transition hover:bg-emerald-100 dark:bg-gray-950 dark:text-emerald-300 dark:hover:bg-gray-900"
+                    >
+                      Gerar termo de aceite
+                    </button>
+                  </aside>
                 </div>
               )}
 
