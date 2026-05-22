@@ -4,6 +4,7 @@ import {
    ArrowLeft,
    Building,
    Camera,
+   CalendarDays,
    Check,
    CheckCircle2,
    ChevronRight,
@@ -14,6 +15,7 @@ import {
    Info,
    Loader2,
    MessageCircle,
+   PlayCircle,
    Plus,
    Receipt,
    Trash2,
@@ -64,6 +66,62 @@ const INSPECTION_TEMPLATES: InspectionTemplate[] = [
    }
 ];
 
+interface ScheduleEvent {
+   id: string;
+   projectId: string;
+   title: string;
+   description?: string;
+   startDate: string;
+   endDate: string;
+   status: 'on-track' | 'delayed' | 'completed';
+   color?: string;
+}
+
+const EXECUTION_PLAN_TEMPLATE = [
+   {
+      title: 'Kickoff e alinhamento de obra',
+      description: 'Reunião inicial com cliente, equipe e responsáveis para validar escopo, regras e comunicação.',
+      startOffset: 0,
+      durationDays: 1
+   },
+   {
+      title: 'Mobilização e proteção do imóvel',
+      description: 'Organização de acesso, proteção de áreas, recebimento inicial e preparação do canteiro.',
+      startOffset: 1,
+      durationDays: 2
+   },
+   {
+      title: 'Demolições e preparação',
+      description: 'Execução das remoções, descarte de resíduos e preparação para instalações.',
+      startOffset: 3,
+      durationDays: 5
+   },
+   {
+      title: 'Instalações elétrica e hidráulica',
+      description: 'Passagem, ajustes, testes preliminares e conferência antes dos fechamentos.',
+      startOffset: 8,
+      durationDays: 7
+   },
+   {
+      title: 'Revestimentos e acabamentos',
+      description: 'Assentamentos, pintura, marcenaria, metais, louças e acabamentos finais.',
+      startOffset: 15,
+      durationDays: 12
+   },
+   {
+      title: 'Vistoria final e entrega técnica',
+      description: 'Checklist final, correções, limpeza, registros e termo de entrega da obra.',
+      startOffset: 28,
+      durationDays: 2
+   }
+] as const;
+
+const addDays = (date: string, days: number) => {
+   const nextDate = new Date(`${date}T00:00:00`);
+   nextDate.setDate(nextDate.getDate() + days);
+   return nextDate.toISOString().split('T')[0];
+};
+
 // Componente Interno para o Form de Lote
 const BatchForm: React.FC<{ onSave: (items: any[], header: any) => void, onCancel: () => void }> = ({ onSave, onCancel }) => {
    const [header, setHeader] = useState({ fornecedor: '', data: new Date().toISOString().split('T')[0], status: 'pago' as StatusCusto });
@@ -108,11 +166,13 @@ const Projects: React.FC = () => {
 
    const [clients, setClients] = useState<{ id: string, nome: string }[]>([]);
    const [custos, setCustos] = useState<CustoProjeto[]>([]);
+   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
 
    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-   const [activeTab, setActiveTab] = useState<'overview' | 'finance' | 'quality'>('overview');
+   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'finance' | 'quality'>('overview');
    const [showBatchModal, setShowBatchModal] = useState(false);
    const [showFiscalModal, setShowFiscalModal] = useState(false);
+   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
 
    // Estados para Módulo de Qualidade
    const [showInspectionModal, setShowInspectionModal] = useState(false);
@@ -151,6 +211,19 @@ const Projects: React.FC = () => {
       return calcularResumoCustos(custosObra, selectedProject.totalBudget);
    }, [selectedProject, custos]);
 
+   const selectedProjectSchedule = useMemo(() => {
+      if (!selectedProject) return [];
+      return scheduleEvents
+         .filter(event => event.projectId === selectedProject.id)
+         .sort((a, b) => a.startDate.localeCompare(b.startDate));
+   }, [selectedProject, scheduleEvents]);
+
+   const scheduleCompleted = selectedProjectSchedule.filter(event => event.status === 'completed').length;
+   const scheduleProgress = selectedProjectSchedule.length
+      ? Math.round((scheduleCompleted / selectedProjectSchedule.length) * 100)
+      : 0;
+   const nextScheduleEvent = selectedProjectSchedule.find(event => event.status !== 'completed');
+
    // Fetch data from Supabase
    useEffect(() => {
       if (user) {
@@ -161,6 +234,7 @@ const Projects: React.FC = () => {
    useEffect(() => {
       if (selectedProject) {
          fetchCosts(selectedProject.id);
+         fetchScheduleEvents(selectedProject.id);
       }
    }, [selectedProject]);
 
@@ -180,8 +254,10 @@ const Projects: React.FC = () => {
          setProjects(data.map(p => ({
             ...p,
             clientName: p.clients?.nome || 'Cliente não encontrado',
+            clientId: p.client_id,
             totalBudget: Number(p.total_budget),
             spentAmount: Number(p.spent_amount),
+            startDate: p.start_date,
             nonConformities: p.non_conformities
          })) as Project[]);
       }
@@ -207,6 +283,90 @@ const Projects: React.FC = () => {
             prestadorNome: c.prestador_nome
          })) as CustoProjeto[]);
       }
+   };
+
+   const fetchScheduleEvents = async (projectId: string) => {
+      const { data, error } = await supabase
+         .from('schedule_events')
+         .select('*')
+         .eq('project_id', projectId)
+         .order('start_date', { ascending: true });
+
+      if (error) {
+         console.error('Error fetching schedule events:', error);
+         return;
+      }
+
+      setScheduleEvents(prev => [
+         ...prev.filter(event => event.projectId !== projectId),
+         ...(data || []).map((event: any) => ({
+            id: event.id,
+            projectId: event.project_id,
+            title: event.title,
+            description: event.description,
+            startDate: event.start_date,
+            endDate: event.end_date,
+            status: event.status,
+            color: event.color
+         }))
+      ]);
+   };
+
+   const handleCreateExecutionPlan = async () => {
+      if (!selectedProject || !user?.id) return;
+
+      setIsCreatingPlan(true);
+      const baseDate = selectedProject.startDate || new Date().toISOString().split('T')[0];
+      const existingTitles = new Set(selectedProjectSchedule.map(event => event.title.toLowerCase()));
+      const payload = EXECUTION_PLAN_TEMPLATE
+         .filter(step => !existingTitles.has(step.title.toLowerCase()))
+         .map(step => ({
+            user_id: user.id,
+            project_id: selectedProject.id,
+            title: step.title,
+            description: step.description,
+            start_date: addDays(baseDate, step.startOffset),
+            end_date: addDays(baseDate, step.startOffset + step.durationDays),
+            status: 'on-track',
+            color: 'teal'
+         }));
+
+      if (!payload.length) {
+         setMessage({ text: 'O roteiro padrão desta obra já foi criado.', type: 'success' });
+         setTimeout(() => setMessage(null), 3000);
+         setIsCreatingPlan(false);
+         return;
+      }
+
+      const { error } = await supabase.from('schedule_events').insert(payload);
+
+      if (error) {
+         setMessage({ text: 'Erro ao gerar plano de execução: ' + error.message, type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+      } else {
+         await fetchScheduleEvents(selectedProject.id);
+         setMessage({ text: 'Plano de execução criado no cronograma da obra.', type: 'success' });
+         setTimeout(() => setMessage(null), 3500);
+      }
+
+      setIsCreatingPlan(false);
+   };
+
+   const handleUpdateScheduleStatus = async (event: ScheduleEvent, status: ScheduleEvent['status']) => {
+      if (!selectedProject) return;
+
+      const { error } = await supabase
+         .from('schedule_events')
+         .update({ status })
+         .eq('id', event.id);
+
+      if (error) {
+         setMessage({ text: 'Erro ao atualizar etapa: ' + error.message, type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      await fetchScheduleEvents(selectedProject.id);
    };
 
    // Verifica se veio redirecionado do Cliente com intenção de criar obra
@@ -547,6 +707,13 @@ const Projects: React.FC = () => {
                            {activeTab === 'overview' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                         <button
+                           onClick={() => setActiveTab('timeline')}
+                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'timeline' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                           Plano de Execução
+                           {activeTab === 'timeline' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
+                        </button>
+                        <button
                            onClick={() => setActiveTab('finance')}
                            className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'finance' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
                         >
@@ -561,6 +728,151 @@ const Projects: React.FC = () => {
                            {activeTab === 'quality' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                      </div>
+                     {activeTab === 'overview' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 animate-in fade-in duration-300">
+                           <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-950">
+                              <div className="flex items-center justify-between gap-4">
+                                 <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Operação</p>
+                                    <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Resumo de execução</h3>
+                                    <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Acompanhe o avanço físico, próximos marcos e saúde financeira da obra.</p>
+                                 </div>
+                                 <button
+                                    onClick={() => setActiveTab('timeline')}
+                                    className="rounded-2xl bg-teal-600 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-teal-700"
+                                 >
+                                    Ver plano
+                                 </button>
+                              </div>
+
+                              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                                 <div className="rounded-3xl bg-white p-5 dark:bg-gray-900">
+                                    <CalendarDays size={22} className="text-teal-600" />
+                                    <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Cronograma</p>
+                                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{scheduleProgress}%</p>
+                                    <p className="mt-1 text-xs font-bold text-gray-500">{scheduleCompleted} de {selectedProjectSchedule.length} etapas concluídas</p>
+                                 </div>
+                                 <div className="rounded-3xl bg-white p-5 dark:bg-gray-900">
+                                    <DollarSign size={22} className="text-emerald-600" />
+                                    <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Realizado</p>
+                                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">R$ {resumo?.custosReais.toLocaleString('pt-BR')}</p>
+                                    <p className="mt-1 text-xs font-bold text-gray-500">Custos pagos ou confirmados</p>
+                                 </div>
+                                 <div className="rounded-3xl bg-white p-5 dark:bg-gray-900">
+                                    <ClipboardCheck size={22} className="text-rose-500" />
+                                    <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Pendências</p>
+                                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{(selectedProject.nonConformities || []).filter(item => item.status !== 'resolved').length}</p>
+                                    <p className="mt-1 text-xs font-bold text-gray-500">Não-conformidades abertas</p>
+                                 </div>
+                              </div>
+                           </div>
+
+                           <aside className="rounded-[32px] border border-teal-100 bg-teal-50 p-6 dark:border-teal-900/50 dark:bg-teal-950/20">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Próximo marco</p>
+                              <h4 className="mt-3 text-xl font-black text-gray-900 dark:text-white">{nextScheduleEvent?.title || 'Plano ainda não criado'}</h4>
+                              <p className="mt-2 text-sm font-semibold leading-6 text-gray-600 dark:text-gray-300">
+                                 {nextScheduleEvent
+                                    ? `${new Date(`${nextScheduleEvent.startDate}T00:00:00`).toLocaleDateString()} até ${new Date(`${nextScheduleEvent.endDate}T00:00:00`).toLocaleDateString()}`
+                                    : 'Gere o roteiro padrão para organizar as etapas principais da obra.'}
+                              </p>
+                              <button
+                                 onClick={handleCreateExecutionPlan}
+                                 disabled={isCreatingPlan}
+                                 className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-950 px-4 py-4 text-[10px] font-black uppercase tracking-widest text-white transition hover:opacity-90 disabled:opacity-60 dark:bg-white dark:text-gray-950"
+                              >
+                                 <PlayCircle size={16} />
+                                 {isCreatingPlan ? 'Gerando...' : 'Gerar roteiro padrão'}
+                              </button>
+                           </aside>
+                        </div>
+                     )}
+
+                     {activeTab === 'timeline' && (
+                        <div className="grid gap-6 lg:grid-cols-[1fr_320px] animate-in fade-in duration-300">
+                           <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-950">
+                              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                 <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Cronograma operacional</p>
+                                    <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Plano de execução da obra</h3>
+                                    <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Organize as etapas que precisam acontecer depois do aceite comercial.</p>
+                                 </div>
+                                 <button
+                                    onClick={handleCreateExecutionPlan}
+                                    disabled={isCreatingPlan}
+                                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-teal-700 disabled:opacity-60"
+                                 >
+                                    <PlayCircle size={16} />
+                                    {isCreatingPlan ? 'Gerando...' : 'Gerar roteiro'}
+                                 </button>
+                              </div>
+
+                              <div className="mt-6 space-y-3">
+                                 {selectedProjectSchedule.length ? (
+                                    selectedProjectSchedule.map((event, index) => (
+                                       <div key={event.id} className="rounded-3xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+                                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                             <div className="flex gap-4">
+                                                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-black ${
+                                                   event.status === 'completed'
+                                                      ? 'bg-emerald-500 text-white'
+                                                      : event.status === 'delayed'
+                                                         ? 'bg-rose-500 text-white'
+                                                         : 'bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-300'
+                                                }`}>
+                                                   {event.status === 'completed' ? <Check size={18} /> : index + 1}
+                                                </div>
+                                                <div>
+                                                   <h4 className="font-black text-gray-900 dark:text-white">{event.title}</h4>
+                                                   <p className="mt-1 text-sm font-semibold leading-6 text-gray-500 dark:text-gray-400">{event.description}</p>
+                                                   <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                      {new Date(`${event.startDate}T00:00:00`).toLocaleDateString()} - {new Date(`${event.endDate}T00:00:00`).toLocaleDateString()}
+                                                   </p>
+                                                </div>
+                                             </div>
+                                             <div className="flex shrink-0 gap-2">
+                                                <button
+                                                   onClick={() => handleUpdateScheduleStatus(event, event.status === 'completed' ? 'on-track' : 'completed')}
+                                                   className="rounded-xl bg-emerald-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300"
+                                                >
+                                                   {event.status === 'completed' ? 'Reabrir' : 'Concluir'}
+                                                </button>
+                                                {event.status !== 'completed' && (
+                                                   <button
+                                                      onClick={() => handleUpdateScheduleStatus(event, event.status === 'delayed' ? 'on-track' : 'delayed')}
+                                                      className="rounded-xl bg-rose-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-rose-700 transition hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-300"
+                                                   >
+                                                      {event.status === 'delayed' ? 'Normalizar' : 'Atraso'}
+                                                   </button>
+                                                )}
+                                             </div>
+                                          </div>
+                                       </div>
+                                    ))
+                                 ) : (
+                                    <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+                                       <CalendarDays size={34} className="mx-auto text-gray-300" />
+                                       <p className="mt-4 font-black text-gray-900 dark:text-white">Nenhuma etapa criada</p>
+                                       <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Gere o roteiro padrão para iniciar o acompanhamento operacional desta obra.</p>
+                                    </div>
+                                 )}
+                              </div>
+                           </div>
+
+                           <aside className="rounded-[32px] border border-teal-100 bg-teal-50 p-6 dark:border-teal-900/50 dark:bg-teal-950/20">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Avanço físico</p>
+                              <p className="mt-3 text-3xl font-black text-gray-900 dark:text-white">{scheduleProgress}%</p>
+                              <div className="mt-5 h-3 overflow-hidden rounded-full bg-white dark:bg-gray-950">
+                                 <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${scheduleProgress}%` }} />
+                              </div>
+                              <p className="mt-4 text-sm font-semibold leading-6 text-gray-600 dark:text-gray-300">
+                                 {selectedProjectSchedule.length
+                                    ? `${scheduleCompleted} de ${selectedProjectSchedule.length} etapas concluídas.`
+                                    : 'O progresso aparecerá quando o roteiro da obra for criado.'}
+                              </p>
+                           </aside>
+                        </div>
+                     )}
+
                      {activeTab === 'quality' && (
                         <div className="space-y-8 animate-in fade-in duration-300">
 
