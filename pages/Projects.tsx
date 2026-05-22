@@ -459,7 +459,6 @@ const Projects: React.FC = () => {
 
       const { error } = await supabase.from('project_daily_reports').insert([{
          user_id: user.id,
-         organization_id: user.organization?.id || null,
          project_id: selectedProject.id,
          report_date: dailyReportForm.reportDate,
          weather: dailyReportForm.weather,
