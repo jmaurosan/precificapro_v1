@@ -11,6 +11,7 @@ import {
    ClipboardCheck,
    CloudDownload,
    DollarSign,
+   FileText,
    Hammer,
    Info,
    Loader2,
@@ -190,6 +191,7 @@ const Projects: React.FC = () => {
    const [showFiscalModal, setShowFiscalModal] = useState(false);
    const [isCreatingPlan, setIsCreatingPlan] = useState(false);
    const [isSavingDailyReport, setIsSavingDailyReport] = useState(false);
+   const [clientReportDays, setClientReportDays] = useState<'7' | '15' | '30' | 'all'>('7');
    const [dailyReportForm, setDailyReportForm] = useState({
       reportDate: new Date().toISOString().split('T')[0],
       weather: 'nao_informado' as DailyReport['weather'],
@@ -257,6 +259,18 @@ const Projects: React.FC = () => {
          .sort((a, b) => b.reportDate.localeCompare(a.reportDate));
    }, [selectedProject, dailyReports]);
    const latestDailyReport = selectedProjectReports[0];
+   const clientReportWindowReports = useMemo(() => {
+      if (clientReportDays === 'all') return selectedProjectReports;
+
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - Number(clientReportDays));
+      const cutoffDate = cutoff.toISOString().split('T')[0];
+
+      return selectedProjectReports.filter(report => report.reportDate >= cutoffDate);
+   }, [selectedProjectReports, clientReportDays]);
+   const clientReportPeriodLabel = clientReportDays === 'all'
+      ? 'todo o histórico'
+      : `últimos ${clientReportDays} dias`;
 
    // Fetch data from Supabase
    useEffect(() => {
@@ -503,6 +517,63 @@ const Projects: React.FC = () => {
       navigator.clipboard.writeText(text);
       setMessage({ text: 'Resumo do diário copiado.', type: 'success' });
       setTimeout(() => setMessage(null), 3000);
+   };
+
+   const buildClientProgressReport = () => {
+      if (!selectedProject) return '';
+
+      const reports = clientReportWindowReports;
+      const latestReportDate = reports[0]?.reportDate
+         ? new Date(`${reports[0].reportDate}T00:00:00`).toLocaleDateString()
+         : 'sem registros no período';
+      const activities = reports
+         .map(report => `- ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}: ${report.activities}`)
+         .join('\n');
+      const blockers = reports
+         .filter(report => report.blockers)
+         .map(report => `- ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}: ${report.blockers}`)
+         .join('\n');
+      const nextSteps = reports
+         .filter(report => report.nextSteps)
+         .map(report => `- ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}: ${report.nextSteps}`)
+         .join('\n');
+      const photosCount = reports.reduce((total, report) => total + report.photos.length, 0);
+
+      return [
+         `Relatório de Andamento - ${selectedProject.name}`,
+         `Cliente: ${selectedProject.clientName}`,
+         `Período: ${clientReportPeriodLabel}`,
+         `Última atualização: ${latestReportDate}`,
+         `Avanço físico registrado: ${scheduleProgress}%`,
+         nextScheduleEvent ? `Próximo marco: ${nextScheduleEvent.title}` : '',
+         '',
+         'Resumo das atividades:',
+         activities || 'Ainda não há atividades registradas neste período.',
+         '',
+         'Pendências e pontos de atenção:',
+         blockers || 'Nenhuma pendência relevante registrada no período.',
+         '',
+         'Próximos passos:',
+         nextSteps || 'Os próximos passos serão atualizados no próximo acompanhamento.',
+         '',
+         photosCount ? `Registros fotográficos anexados/linkados: ${photosCount}` : ''
+      ].filter(line => line !== '').join('\n');
+   };
+
+   const handleCopyClientProgressReport = () => {
+      const reportText = buildClientProgressReport();
+      if (!reportText) return;
+
+      navigator.clipboard.writeText(reportText);
+      setMessage({ text: 'Relatório de andamento copiado para enviar ao cliente.', type: 'success' });
+      setTimeout(() => setMessage(null), 3500);
+   };
+
+   const handleSendClientProgressWhatsapp = () => {
+      const reportText = buildClientProgressReport();
+      if (!reportText || !selectedProject) return;
+
+      window.open(createWhatsappLink('11999999999', reportText), '_blank');
    };
 
    // Verifica se veio redirecionado do Cliente com intenção de criar obra
@@ -1141,6 +1212,53 @@ const Projects: React.FC = () => {
                                  <span className="rounded-full bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-500 dark:bg-gray-900">
                                     {selectedProjectReports.length} registros
                                  </span>
+                              </div>
+
+                              <div className="mt-6 rounded-3xl border border-teal-100 bg-teal-50 p-5 dark:border-teal-900/50 dark:bg-teal-950/20">
+                                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                    <div className="flex items-start gap-4">
+                                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-teal-600 text-white">
+                                          <FileText size={22} />
+                                       </div>
+                                       <div>
+                                          <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Cliente</p>
+                                          <h4 className="mt-1 text-lg font-black text-gray-900 dark:text-white">Relatório de andamento</h4>
+                                          <p className="mt-1 text-sm font-semibold leading-6 text-gray-600 dark:text-gray-300">
+                                             Gere uma atualização limpa com avanço, atividades, pendências e próximos passos.
+                                          </p>
+                                       </div>
+                                    </div>
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                       <select
+                                          value={clientReportDays}
+                                          onChange={(e) => setClientReportDays(e.target.value as typeof clientReportDays)}
+                                          className="rounded-2xl border border-teal-100 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-700 outline-none dark:border-teal-900 dark:bg-gray-950 dark:text-gray-200"
+                                       >
+                                          <option value="7">Últimos 7 dias</option>
+                                          <option value="15">Últimos 15 dias</option>
+                                          <option value="30">Últimos 30 dias</option>
+                                          <option value="all">Todo histórico</option>
+                                       </select>
+                                       <button
+                                          onClick={handleCopyClientProgressReport}
+                                          disabled={!selectedProjectReports.length}
+                                          className="rounded-2xl bg-gray-950 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950"
+                                       >
+                                          Copiar relatório
+                                       </button>
+                                       <button
+                                          onClick={handleSendClientProgressWhatsapp}
+                                          disabled={!selectedProjectReports.length}
+                                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                       >
+                                          <MessageCircle size={15} />
+                                          WhatsApp
+                                       </button>
+                                    </div>
+                                 </div>
+                                 <p className="mt-4 text-xs font-bold text-teal-700 dark:text-teal-300">
+                                    {clientReportWindowReports.length} registro(s) considerados em {clientReportPeriodLabel}.
+                                 </p>
                               </div>
 
                               <div className="mt-6 space-y-4">
