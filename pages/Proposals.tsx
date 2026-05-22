@@ -226,6 +226,7 @@ const ProposalsPage: React.FC = () => {
   const [detailsTab, setDetailsTab] = useState<'summary' | 'items' | 'history' | 'contracts' | 'checklist' | 'actions'>('summary');
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
   const [contractUploadStartedAt, setContractUploadStartedAt] = useState<number | null>(null);
+  const [startingProjectId, setStartingProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!uploadingContractId || !contractUploadStartedAt) return;
@@ -1340,17 +1341,20 @@ const ProposalsPage: React.FC = () => {
 
     if (proposal.status === 'approved' && proposal.projectId) {
       navigate('/projects');
-      return;
+      return true;
     }
 
     let projectId = proposal.projectId;
+    let createdProjectName = '';
+    let createdProject = false;
 
     if (!projectId) {
+      createdProjectName = proposal.projetoNome !== 'Geral' ? proposal.projetoNome : `Obra - ${proposal.client}`;
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert([{
           user_id: user?.id,
-          name: proposal.projetoNome !== 'Geral' ? proposal.projetoNome : `Obra - ${proposal.client}`,
+          name: createdProjectName,
           client_id: proposal.clientId || null,
           client_name: proposal.client,
           total_budget: proposal.total,
@@ -1364,10 +1368,11 @@ const ProposalsPage: React.FC = () => {
       if (projectError) {
         setMessage({ text: 'Erro ao criar obra a partir da proposta: ' + projectError.message, type: 'error' });
         setTimeout(() => setMessage(null), 4500);
-        return;
+        return false;
       }
 
       projectId = project.id;
+      createdProject = true;
     }
 
     await supabase
@@ -1378,6 +1383,26 @@ const ProposalsPage: React.FC = () => {
         observacoes: buildAcceptanceNotes(proposal, projectId)
       })
       .eq('id', proposal.id);
+
+    await supabase
+      .from('proposal_start_checklist')
+      .update({ project_id: projectId })
+      .eq('proposal_id', proposal.id);
+
+    if (createdProject && projectId) {
+      await supabase
+        .from('schedule_events')
+        .insert([{
+          user_id: user?.id,
+          project_id: projectId,
+          title: `Kickoff - ${createdProjectName || proposal.client}`,
+          description: 'Marco inicial criado automaticamente a partir da proposta aprovada e checklist concluído.',
+          start_date: new Date().toISOString().split('T')[0],
+          end_date: new Date().toISOString().split('T')[0],
+          status: 'on-track',
+          color: 'teal'
+        }]);
+    }
 
     if (proposal.clientId) {
       await supabase
@@ -1397,6 +1422,28 @@ const ProposalsPage: React.FC = () => {
     await fetchProposals();
     setMessage({ text: 'Proposta aprovada e obra criada com sucesso.', type: 'success' });
     setTimeout(() => setMessage(null), 3500);
+    return true;
+  };
+
+  const handleStartProjectFromChecklist = async (proposal: Proposal) => {
+    const checklist = proposal.checklist || [];
+    const isReady = checklist.length > 0 && checklist.every((item) => item.status === 'done');
+
+    if (!isReady) {
+      setMessage({ text: 'Conclua todos os itens do checklist antes de iniciar a obra.', type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    setStartingProjectId(proposal.id);
+    try {
+      const started = await handleApproveAndCreateProject(proposal);
+      if (started) {
+        setDetailsTab('actions');
+      }
+    } finally {
+      setStartingProjectId(null);
+    }
   };
 
   const handleSignedContractUpload = async (proposal: Proposal, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2218,6 +2265,25 @@ const ProposalsPage: React.FC = () => {
                         <p className="text-[10px] font-black uppercase tracking-widest">Pronto para execução</p>
                         <p className="mt-1 text-sm font-bold">Todos os itens de partida foram concluídos.</p>
                       </div>
+                    )}
+                    {selectedChecklist.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartProjectFromChecklist(selectedProposal)}
+                        disabled={selectedChecklistDone !== selectedChecklist.length || startingProjectId === selectedProposal.id}
+                        className={`mt-5 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-4 text-[11px] font-black uppercase tracking-widest transition ${
+                          selectedChecklistDone === selectedChecklist.length
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70'
+                            : 'cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-gray-900 dark:text-gray-500'
+                        }`}
+                      >
+                        <Hammer size={17} />
+                        {startingProjectId === selectedProposal.id
+                          ? 'Iniciando obra...'
+                          : selectedProposal.projectId
+                            ? 'Abrir obra vinculada'
+                            : 'Iniciar obra'}
+                      </button>
                     )}
                   </aside>
                 </div>
