@@ -77,6 +77,21 @@ interface ScheduleEvent {
    color?: string;
 }
 
+interface DailyReport {
+   id: string;
+   projectId: string;
+   reportDate: string;
+   weather: 'nao_informado' | 'sol' | 'nublado' | 'chuva' | 'interrompido';
+   status: 'em_andamento' | 'concluido' | 'parcial' | 'bloqueado';
+   workforce?: string;
+   activities: string;
+   blockers?: string;
+   nextSteps?: string;
+   photos: string[];
+   sharedWithClient: boolean;
+   createdAt: string;
+}
+
 const EXECUTION_PLAN_TEMPLATE = [
    {
       title: 'Kickoff e alinhamento de obra',
@@ -167,12 +182,24 @@ const Projects: React.FC = () => {
    const [clients, setClients] = useState<{ id: string, nome: string }[]>([]);
    const [custos, setCustos] = useState<CustoProjeto[]>([]);
    const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
+   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
 
    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'finance' | 'quality'>('overview');
+   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'diary' | 'finance' | 'quality'>('overview');
    const [showBatchModal, setShowBatchModal] = useState(false);
    const [showFiscalModal, setShowFiscalModal] = useState(false);
    const [isCreatingPlan, setIsCreatingPlan] = useState(false);
+   const [isSavingDailyReport, setIsSavingDailyReport] = useState(false);
+   const [dailyReportForm, setDailyReportForm] = useState({
+      reportDate: new Date().toISOString().split('T')[0],
+      weather: 'nao_informado' as DailyReport['weather'],
+      status: 'em_andamento' as DailyReport['status'],
+      workforce: '',
+      activities: '',
+      blockers: '',
+      nextSteps: '',
+      photosText: ''
+   });
 
    // Estados para Módulo de Qualidade
    const [showInspectionModal, setShowInspectionModal] = useState(false);
@@ -223,6 +250,13 @@ const Projects: React.FC = () => {
       ? Math.round((scheduleCompleted / selectedProjectSchedule.length) * 100)
       : 0;
    const nextScheduleEvent = selectedProjectSchedule.find(event => event.status !== 'completed');
+   const selectedProjectReports = useMemo(() => {
+      if (!selectedProject) return [];
+      return dailyReports
+         .filter(report => report.projectId === selectedProject.id)
+         .sort((a, b) => b.reportDate.localeCompare(a.reportDate));
+   }, [selectedProject, dailyReports]);
+   const latestDailyReport = selectedProjectReports[0];
 
    // Fetch data from Supabase
    useEffect(() => {
@@ -235,6 +269,7 @@ const Projects: React.FC = () => {
       if (selectedProject) {
          fetchCosts(selectedProject.id);
          fetchScheduleEvents(selectedProject.id);
+         fetchDailyReports(selectedProject.id);
       }
    }, [selectedProject]);
 
@@ -367,6 +402,108 @@ const Projects: React.FC = () => {
       }
 
       await fetchScheduleEvents(selectedProject.id);
+   };
+
+   const fetchDailyReports = async (projectId: string) => {
+      const { data, error } = await supabase
+         .from('project_daily_reports')
+         .select('*')
+         .eq('project_id', projectId)
+         .order('report_date', { ascending: false });
+
+      if (error) {
+         console.warn('Diário de obra indisponível:', error.message);
+         return;
+      }
+
+      setDailyReports(prev => [
+         ...prev.filter(report => report.projectId !== projectId),
+         ...(data || []).map((report: any) => ({
+            id: report.id,
+            projectId: report.project_id,
+            reportDate: report.report_date,
+            weather: report.weather,
+            status: report.status,
+            workforce: report.workforce || '',
+            activities: report.activities,
+            blockers: report.blockers || '',
+            nextSteps: report.next_steps || '',
+            photos: Array.isArray(report.photos) ? report.photos : [],
+            sharedWithClient: Boolean(report.shared_with_client),
+            createdAt: report.created_at
+         }))
+      ]);
+   };
+
+   const resetDailyReportForm = () => {
+      setDailyReportForm({
+         reportDate: new Date().toISOString().split('T')[0],
+         weather: 'nao_informado',
+         status: 'em_andamento',
+         workforce: '',
+         activities: '',
+         blockers: '',
+         nextSteps: '',
+         photosText: ''
+      });
+   };
+
+   const handleSaveDailyReport = async () => {
+      if (!selectedProject || !user?.id || !dailyReportForm.activities.trim()) return;
+
+      setIsSavingDailyReport(true);
+      const photos = dailyReportForm.photosText
+         .split('\n')
+         .map(item => item.trim())
+         .filter(Boolean);
+
+      const { error } = await supabase.from('project_daily_reports').insert([{
+         user_id: user.id,
+         organization_id: user.organization?.id || null,
+         project_id: selectedProject.id,
+         report_date: dailyReportForm.reportDate,
+         weather: dailyReportForm.weather,
+         status: dailyReportForm.status,
+         workforce: dailyReportForm.workforce || null,
+         activities: dailyReportForm.activities,
+         blockers: dailyReportForm.blockers || null,
+         next_steps: dailyReportForm.nextSteps || null,
+         photos,
+         shared_with_client: false
+      }]);
+
+      if (error) {
+         setMessage({ text: 'Erro ao salvar diário. Aplique a migration 00007_project_daily_reports.sql no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+      } else {
+         await fetchDailyReports(selectedProject.id);
+         resetDailyReportForm();
+         setMessage({ text: 'Diário de obra registrado com sucesso.', type: 'success' });
+         setTimeout(() => setMessage(null), 3500);
+      }
+
+      setIsSavingDailyReport(false);
+   };
+
+   const handleCopyDailyReportSummary = (report: DailyReport) => {
+      if (!selectedProject) return;
+
+      const text = [
+         `Diário de Obra - ${selectedProject.name}`,
+         `Cliente: ${selectedProject.clientName}`,
+         `Data: ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}`,
+         `Status: ${report.status.replace('_', ' ')}`,
+         report.workforce ? `Equipe/Responsáveis: ${report.workforce}` : '',
+         '',
+         `Atividades realizadas:`,
+         report.activities,
+         report.blockers ? `\nPendências / Bloqueios:\n${report.blockers}` : '',
+         report.nextSteps ? `\nPróximos passos:\n${report.nextSteps}` : ''
+      ].filter(Boolean).join('\n');
+
+      navigator.clipboard.writeText(text);
+      setMessage({ text: 'Resumo do diário copiado.', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
    };
 
    // Verifica se veio redirecionado do Cliente com intenção de criar obra
@@ -714,6 +851,13 @@ const Projects: React.FC = () => {
                            {activeTab === 'timeline' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                         <button
+                           onClick={() => setActiveTab('diary')}
+                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'diary' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                           Diário de Obra
+                           {activeTab === 'diary' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
+                        </button>
+                        <button
                            onClick={() => setActiveTab('finance')}
                            className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'finance' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
                         >
@@ -745,7 +889,7 @@ const Projects: React.FC = () => {
                                  </button>
                               </div>
 
-                              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                              <div className="mt-6 grid gap-4 md:grid-cols-4">
                                  <div className="rounded-3xl bg-white p-5 dark:bg-gray-900">
                                     <CalendarDays size={22} className="text-teal-600" />
                                     <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Cronograma</p>
@@ -763,6 +907,12 @@ const Projects: React.FC = () => {
                                     <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Pendências</p>
                                     <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{(selectedProject.nonConformities || []).filter(item => item.status !== 'resolved').length}</p>
                                     <p className="mt-1 text-xs font-bold text-gray-500">Não-conformidades abertas</p>
+                                 </div>
+                                 <div className="rounded-3xl bg-white p-5 dark:bg-gray-900">
+                                    <ClipboardCheck size={22} className="text-sky-600" />
+                                    <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Diários</p>
+                                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{selectedProjectReports.length}</p>
+                                    <p className="mt-1 text-xs font-bold text-gray-500">{latestDailyReport ? `Último em ${new Date(`${latestDailyReport.reportDate}T00:00:00`).toLocaleDateString()}` : 'Nenhum registro ainda'}</p>
                                  </div>
                               </div>
                            </div>
@@ -870,6 +1020,189 @@ const Projects: React.FC = () => {
                                     : 'O progresso aparecerá quando o roteiro da obra for criado.'}
                               </p>
                            </aside>
+                        </div>
+                     )}
+
+                     {activeTab === 'diary' && (
+                        <div className="grid gap-6 lg:grid-cols-[420px_1fr] animate-in fade-in duration-300">
+                           <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-950">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Registro de campo</p>
+                              <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Novo diário de obra</h3>
+                              <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Registre evolução, equipe, pendências e próximos passos.</p>
+
+                              <div className="mt-6 space-y-4">
+                                 <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Data</label>
+                                       <input
+                                          type="date"
+                                          value={dailyReportForm.reportDate}
+                                          onChange={(e) => setDailyReportForm({ ...dailyReportForm, reportDate: e.target.value })}
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       />
+                                    </div>
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Status</label>
+                                       <select
+                                          value={dailyReportForm.status}
+                                          onChange={(e) => setDailyReportForm({ ...dailyReportForm, status: e.target.value as DailyReport['status'] })}
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       >
+                                          <option value="em_andamento">Em andamento</option>
+                                          <option value="concluido">Concluído</option>
+                                          <option value="parcial">Parcial</option>
+                                          <option value="bloqueado">Bloqueado</option>
+                                       </select>
+                                    </div>
+                                 </div>
+
+                                 <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Clima</label>
+                                       <select
+                                          value={dailyReportForm.weather}
+                                          onChange={(e) => setDailyReportForm({ ...dailyReportForm, weather: e.target.value as DailyReport['weather'] })}
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       >
+                                          <option value="nao_informado">Não informado</option>
+                                          <option value="sol">Sol</option>
+                                          <option value="nublado">Nublado</option>
+                                          <option value="chuva">Chuva</option>
+                                          <option value="interrompido">Interrompido</option>
+                                       </select>
+                                    </div>
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Equipe</label>
+                                       <input
+                                          value={dailyReportForm.workforce}
+                                          onChange={(e) => setDailyReportForm({ ...dailyReportForm, workforce: e.target.value })}
+                                          placeholder="Ex: pedreiro, pintor..."
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       />
+                                    </div>
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Atividades realizadas</label>
+                                    <textarea
+                                       value={dailyReportForm.activities}
+                                       onChange={(e) => setDailyReportForm({ ...dailyReportForm, activities: e.target.value })}
+                                       placeholder="Descreva o que foi executado hoje..."
+                                       className="mt-2 h-28 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Pendências / bloqueios</label>
+                                    <textarea
+                                       value={dailyReportForm.blockers}
+                                       onChange={(e) => setDailyReportForm({ ...dailyReportForm, blockers: e.target.value })}
+                                       placeholder="Itens pendentes, decisões do cliente, atrasos..."
+                                       className="mt-2 h-20 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Próximos passos</label>
+                                    <textarea
+                                       value={dailyReportForm.nextSteps}
+                                       onChange={(e) => setDailyReportForm({ ...dailyReportForm, nextSteps: e.target.value })}
+                                       placeholder="O que será feito na próxima visita ou etapa..."
+                                       className="mt-2 h-20 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Fotos / links</label>
+                                    <textarea
+                                       value={dailyReportForm.photosText}
+                                       onChange={(e) => setDailyReportForm({ ...dailyReportForm, photosText: e.target.value })}
+                                       placeholder="Cole um link por linha. Upload direto fica para a próxima etapa."
+                                       className="mt-2 h-20 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <button
+                                    onClick={handleSaveDailyReport}
+                                    disabled={!dailyReportForm.activities.trim() || isSavingDailyReport}
+                                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                 >
+                                    {isSavingDailyReport ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                    {isSavingDailyReport ? 'Salvando...' : 'Salvar diário'}
+                                 </button>
+                              </div>
+                           </div>
+
+                           <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-950">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                 <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Histórico</p>
+                                    <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Relatórios de andamento</h3>
+                                 </div>
+                                 <span className="rounded-full bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-500 dark:bg-gray-900">
+                                    {selectedProjectReports.length} registros
+                                 </span>
+                              </div>
+
+                              <div className="mt-6 space-y-4">
+                                 {selectedProjectReports.length ? (
+                                    selectedProjectReports.map(report => (
+                                       <article key={report.id} className="rounded-3xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+                                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                             <div>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                   <span className="rounded-full bg-teal-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                                                      {new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}
+                                                   </span>
+                                                   <span className="rounded-full bg-gray-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-gray-500 dark:bg-gray-800">
+                                                      {report.status.replace('_', ' ')}
+                                                   </span>
+                                                   <span className="rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                                      {report.weather.replace('_', ' ')}
+                                                   </span>
+                                                </div>
+                                                {report.workforce && <p className="mt-4 text-xs font-black uppercase tracking-widest text-gray-400">Equipe: {report.workforce}</p>}
+                                                <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6 text-gray-700 dark:text-gray-200">{report.activities}</p>
+                                                {report.blockers && (
+                                                   <div className="mt-4 rounded-2xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">
+                                                      <p className="text-[10px] font-black uppercase tracking-widest">Pendências</p>
+                                                      <p className="mt-1 whitespace-pre-line text-sm font-semibold">{report.blockers}</p>
+                                                   </div>
+                                                )}
+                                                {report.nextSteps && (
+                                                   <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                                                      <p className="text-[10px] font-black uppercase tracking-widest">Próximos passos</p>
+                                                      <p className="mt-1 whitespace-pre-line text-sm font-semibold">{report.nextSteps}</p>
+                                                   </div>
+                                                )}
+                                                {report.photos.length > 0 && (
+                                                   <div className="mt-4 flex flex-wrap gap-2">
+                                                      {report.photos.map((photo, index) => (
+                                                         <a key={`${report.id}-${photo}`} href={photo} target="_blank" rel="noreferrer" className="rounded-xl bg-gray-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-600 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300">
+                                                            Foto {index + 1}
+                                                         </a>
+                                                      ))}
+                                                   </div>
+                                                )}
+                                             </div>
+                                             <button
+                                                onClick={() => handleCopyDailyReportSummary(report)}
+                                                className="shrink-0 rounded-2xl bg-gray-950 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:opacity-90 dark:bg-white dark:text-gray-950"
+                                             >
+                                                Copiar
+                                             </button>
+                                          </div>
+                                       </article>
+                                    ))
+                                 ) : (
+                                    <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+                                       <ClipboardCheck size={34} className="mx-auto text-gray-300" />
+                                       <p className="mt-4 font-black text-gray-900 dark:text-white">Nenhum diário registrado</p>
+                                       <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Crie o primeiro relatório para documentar o andamento da obra.</p>
+                                    </div>
+                                 )}
+                              </div>
+                           </div>
                         </div>
                      )}
 
