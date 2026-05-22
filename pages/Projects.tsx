@@ -18,6 +18,7 @@ import {
    MessageCircle,
    PlayCircle,
    Plus,
+   Printer,
    Receipt,
    Trash2,
    X
@@ -565,6 +566,7 @@ const Projects: React.FC = () => {
       if (!reportText) return;
 
       navigator.clipboard.writeText(reportText);
+      markClientReportAsShared();
       setMessage({ text: 'Relatório de andamento copiado para enviar ao cliente.', type: 'success' });
       setTimeout(() => setMessage(null), 3500);
    };
@@ -574,6 +576,67 @@ const Projects: React.FC = () => {
       if (!reportText || !selectedProject) return;
 
       window.open(createWhatsappLink('11999999999', reportText), '_blank');
+      markClientReportAsShared();
+   };
+
+   const markClientReportAsShared = async () => {
+      if (!selectedProject || !clientReportWindowReports.length) return;
+
+      const reportIds = clientReportWindowReports.map(report => report.id);
+      setDailyReports(prev => prev.map(report => reportIds.includes(report.id) ? { ...report, sharedWithClient: true } : report));
+
+      const { error } = await supabase
+         .from('project_daily_reports')
+         .update({ shared_with_client: true })
+         .in('id', reportIds);
+
+      if (error) {
+         console.warn('Não foi possível marcar relatório como compartilhado:', error.message);
+      }
+   };
+
+   const handlePrintClientProgressReport = () => {
+      const reportText = buildClientProgressReport();
+      if (!reportText || !selectedProject) return;
+
+      const printable = reportText
+         .split('\n')
+         .map(line => line.trim()
+            ? `<p>${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
+            : '<br />')
+         .join('');
+      const printWindow = window.open('', '_blank', 'width=900,height=720');
+      if (!printWindow) {
+         setMessage({ text: 'Não foi possível abrir a prévia. Verifique o bloqueador de pop-up.', type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Relatório - ${selectedProject.name}</title>
+            <style>
+              body { font-family: Arial, sans-serif; color: #111827; margin: 40px; line-height: 1.5; }
+              .header { border-bottom: 3px solid #0f766e; padding-bottom: 18px; margin-bottom: 28px; }
+              .brand { color: #0f766e; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+              h1 { font-size: 28px; margin: 8px 0 0; }
+              p { margin: 0 0 9px; white-space: pre-wrap; }
+              @media print { body { margin: 24px; } }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div class="brand">PrecificaPro</div>
+              <h1>Relatório de Andamento</h1>
+            </div>
+            ${printable}
+            <script>window.onload = () => window.print();</script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      markClientReportAsShared();
    };
 
    // Verifica se veio redirecionado do Cliente com intenção de criar obra
@@ -1247,6 +1310,14 @@ const Projects: React.FC = () => {
                                           Copiar relatório
                                        </button>
                                        <button
+                                          onClick={handlePrintClientProgressReport}
+                                          disabled={!selectedProjectReports.length}
+                                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-teal-700 transition hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-950 dark:text-teal-300 dark:hover:bg-gray-900"
+                                       >
+                                          <Printer size={15} />
+                                          Imprimir
+                                       </button>
+                                       <button
                                           onClick={handleSendClientProgressWhatsapp}
                                           disabled={!selectedProjectReports.length}
                                           className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1257,7 +1328,7 @@ const Projects: React.FC = () => {
                                     </div>
                                  </div>
                                  <p className="mt-4 text-xs font-bold text-teal-700 dark:text-teal-300">
-                                    {clientReportWindowReports.length} registro(s) considerados em {clientReportPeriodLabel}.
+                                    {clientReportWindowReports.length} registro(s) considerados em {clientReportPeriodLabel}. {clientReportWindowReports.filter(report => report.sharedWithClient).length} já marcado(s) como compartilhado(s).
                                  </p>
                               </div>
 
@@ -1277,6 +1348,11 @@ const Projects: React.FC = () => {
                                                    <span className="rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
                                                       {report.weather.replace('_', ' ')}
                                                    </span>
+                                                   {report.sharedWithClient && (
+                                                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                                         Compartilhado
+                                                      </span>
+                                                   )}
                                                 </div>
                                                 {report.workforce && <p className="mt-4 text-xs font-black uppercase tracking-widest text-gray-400">Equipe: {report.workforce}</p>}
                                                 <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6 text-gray-700 dark:text-gray-200">{report.activities}</p>
