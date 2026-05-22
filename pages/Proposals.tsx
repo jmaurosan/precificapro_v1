@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Clipboard,
   Clock3,
+  FileCheck,
   FileSignature,
   Hammer,
   Link2,
@@ -55,6 +56,7 @@ interface Proposal {
   publicToken?: string;
   events?: ProposalEvent[];
   contracts?: ProposalContractFile[];
+  checklist?: ProposalChecklistItem[];
 }
 
 interface ProposalEvent {
@@ -75,6 +77,16 @@ interface ProposalContractFile {
   status: 'draft' | 'sent' | 'signed' | 'cancelled';
   uploadedAt: string;
   notes?: string;
+}
+
+interface ProposalChecklistItem {
+  id: string;
+  taskKey: string;
+  title: string;
+  description?: string;
+  status: 'pending' | 'done' | 'skipped';
+  sortOrder: number;
+  completedAt?: string;
 }
 
 interface OfficeProfile {
@@ -159,6 +171,44 @@ const proposalTemplates = [
   }
 ] as const;
 
+const startChecklistTemplate = [
+  {
+    taskKey: 'signed_contract',
+    title: 'Contrato assinado anexado',
+    description: 'Guardar o termo ou contrato assinado no dossiê da proposta.'
+  },
+  {
+    taskKey: 'initial_payment',
+    title: 'Pagamento inicial confirmado',
+    description: 'Confirmar sinal, entrada ou primeira parcela antes de mobilizar a execução.'
+  },
+  {
+    taskKey: 'final_briefing',
+    title: 'Briefing final validado',
+    description: 'Revisar escopo, ambientes, premissas e prioridades com o cliente.'
+  },
+  {
+    taskKey: 'required_documents',
+    title: 'Documentos obrigatórios conferidos',
+    description: 'Verificar autorizações, ART/RRT, condomínio, alvarás ou documentos aplicáveis.'
+  },
+  {
+    taskKey: 'schedule_defined',
+    title: 'Cronograma inicial definido',
+    description: 'Criar ou revisar datas de início, marcos principais e entregas.'
+  },
+  {
+    taskKey: 'team_allocated',
+    title: 'Equipe e prestadores alinhados',
+    description: 'Definir responsáveis, fornecedores e frentes de trabalho.'
+  },
+  {
+    taskKey: 'kickoff_ready',
+    title: 'Kickoff de obra pronto',
+    description: 'Confirmar que a obra pode iniciar com documentação, escopo e agenda organizados.'
+  }
+] as const;
+
 const ProposalsPage: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
@@ -173,7 +223,7 @@ const ProposalsPage: React.FC = () => {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [officeProfile, setOfficeProfile] = useState<OfficeProfile | null>(null);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
-  const [detailsTab, setDetailsTab] = useState<'summary' | 'items' | 'history' | 'contracts' | 'actions'>('summary');
+  const [detailsTab, setDetailsTab] = useState<'summary' | 'items' | 'history' | 'contracts' | 'checklist' | 'actions'>('summary');
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
   const [contractUploadStartedAt, setContractUploadStartedAt] = useState<number | null>(null);
 
@@ -291,6 +341,7 @@ const ProposalsPage: React.FC = () => {
       setProposals(mappedProposals);
       await fetchProposalEvents(mappedProposals.map((proposal: Proposal) => proposal.id));
       await fetchProposalContracts(mappedProposals.map((proposal: Proposal) => proposal.id));
+      await fetchProposalChecklist(mappedProposals.map((proposal: Proposal) => proposal.id));
     }
     setLoading(false);
   };
@@ -362,6 +413,41 @@ const ProposalsPage: React.FC = () => {
     setProposals((current) => current.map((proposal) => ({
       ...proposal,
       contracts: contractsByProposal[proposal.id] || []
+    })));
+  };
+
+  const fetchProposalChecklist = async (proposalIds: string[]) => {
+    if (!proposalIds.length) return;
+
+    const { data, error } = await supabase
+      .from('proposal_start_checklist')
+      .select('id, proposal_id, task_key, title, description, status, sort_order, completed_at')
+      .in('proposal_id', proposalIds)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      console.warn('Proposal start checklist unavailable:', error.message);
+      return;
+    }
+
+    const checklistByProposal = (data || []).reduce((acc: Record<string, ProposalChecklistItem[]>, item: any) => {
+      const proposalId = item.proposal_id;
+      acc[proposalId] = acc[proposalId] || [];
+      acc[proposalId].push({
+        id: item.id,
+        taskKey: item.task_key,
+        title: item.title,
+        description: item.description || '',
+        status: item.status || 'pending',
+        sortOrder: Number(item.sort_order || 0),
+        completedAt: item.completed_at || ''
+      });
+      return acc;
+    }, {});
+
+    setProposals((current) => current.map((proposal) => ({
+      ...proposal,
+      checklist: checklistByProposal[proposal.id] || []
     })));
   };
 
@@ -1424,6 +1510,77 @@ const ProposalsPage: React.FC = () => {
     window.open(data.signedUrl, '_blank');
   };
 
+  const handleCreateStartChecklist = async (proposal: Proposal) => {
+    if (!user?.id) return;
+
+    const payload = startChecklistTemplate.map((item, index) => ({
+      user_id: user.id,
+      proposal_id: proposal.id,
+      project_id: proposal.projectId || null,
+      task_key: item.taskKey,
+      title: item.title,
+      description: item.description,
+      status: item.taskKey === 'signed_contract' && (proposal.contracts || []).length ? 'done' : 'pending',
+      sort_order: index + 1,
+      completed_at: item.taskKey === 'signed_contract' && (proposal.contracts || []).length ? new Date().toISOString() : null,
+      completed_by: item.taskKey === 'signed_contract' && (proposal.contracts || []).length ? user.id : null
+    }));
+
+    const { error } = await supabase
+      .from('proposal_start_checklist')
+      .upsert(payload, { onConflict: 'proposal_id,task_key' });
+
+    if (error) {
+      setMessage({ text: 'Erro ao criar checklist. Aplique a migration 00006_proposal_start_checklist.sql no Supabase.', type: 'error' });
+      setTimeout(() => setMessage(null), 6500);
+      return;
+    }
+
+    await recordProposalEvent(
+      proposal.id,
+      'start_checklist_created',
+      'Checklist de início criado',
+      'Checklist pós-aceite preparado para transição comercial -> obra.',
+      { items: payload.length }
+    );
+
+    await fetchProposals();
+    setMessage({ text: 'Checklist de início de obra criado.', type: 'success' });
+    setTimeout(() => setMessage(null), 3500);
+  };
+
+  const handleToggleChecklistItem = async (proposal: Proposal, item: ProposalChecklistItem) => {
+    if (!user?.id) return;
+
+    const nextStatus = item.status === 'done' ? 'pending' : 'done';
+    const { error } = await supabase
+      .from('proposal_start_checklist')
+      .update({
+        status: nextStatus,
+        completed_at: nextStatus === 'done' ? new Date().toISOString() : null,
+        completed_by: nextStatus === 'done' ? user.id : null
+      })
+      .eq('id', item.id);
+
+    if (error) {
+      setMessage({ text: 'Erro ao atualizar checklist: ' + error.message, type: 'error' });
+      setTimeout(() => setMessage(null), 4500);
+      return;
+    }
+
+    if (nextStatus === 'done') {
+      await recordProposalEvent(
+        proposal.id,
+        'start_checklist_item_done',
+        'Item do checklist concluído',
+        item.title,
+        { taskKey: item.taskKey }
+      );
+    }
+
+    await fetchProposals();
+  };
+
   const handleCreateDemoProposal = async () => {
     if (!user?.id) return;
 
@@ -1564,8 +1721,14 @@ const ProposalsPage: React.FC = () => {
     { id: 'items', label: 'Itens' },
     { id: 'history', label: 'Histórico' },
     { id: 'contracts', label: 'Contrato' },
+    { id: 'checklist', label: 'Checklist' },
     { id: 'actions', label: 'Ações' }
   ];
+  const selectedChecklist = selectedProposal?.checklist || [];
+  const selectedChecklistDone = selectedChecklist.filter((item) => item.status === 'done').length;
+  const selectedChecklistProgress = selectedChecklist.length
+    ? Math.round((selectedChecklistDone / selectedChecklist.length) * 100)
+    : 0;
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-500">
@@ -1971,6 +2134,91 @@ const ProposalsPage: React.FC = () => {
                     >
                       Gerar termo de aceite
                     </button>
+                  </aside>
+                </div>
+              )}
+
+              {detailsTab === 'checklist' && (
+                <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+                  <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Pós-aceite</p>
+                        <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Checklist de início de obra</h3>
+                        <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Organize os passos necessários antes de mobilizar a execução.</p>
+                      </div>
+                      {!selectedChecklist.length && (
+                        <button
+                          type="button"
+                          onClick={() => handleCreateStartChecklist(selectedProposal)}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black uppercase tracking-widest text-white transition hover:bg-teal-700"
+                        >
+                          <FileCheck size={17} />
+                          Criar checklist
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mt-6 space-y-3">
+                      {selectedChecklist.length ? (
+                        selectedChecklist.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleToggleChecklistItem(selectedProposal, item)}
+                            className={`w-full rounded-3xl border p-5 text-left transition ${
+                              item.status === 'done'
+                                ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20'
+                                : 'border-gray-100 bg-white hover:border-teal-200 dark:border-gray-800 dark:bg-gray-950 dark:hover:border-teal-800'
+                            }`}
+                          >
+                            <div className="flex items-start gap-4">
+                              <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
+                                item.status === 'done'
+                                  ? 'border-emerald-500 bg-emerald-500 text-white'
+                                  : 'border-gray-300 text-gray-400 dark:border-gray-700'
+                              }`}>
+                                {item.status === 'done' ? <CheckCircle2 size={16} /> : <FileCheck size={15} />}
+                              </span>
+                              <div>
+                                <p className="font-black text-gray-900 dark:text-white">{item.title}</p>
+                                <p className="mt-1 text-sm font-semibold leading-6 text-gray-500 dark:text-gray-400">{item.description}</p>
+                                {item.completedAt && (
+                                  <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300">
+                                    Concluído em {formatDateTime(item.completedAt)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-950">
+                          <FileCheck size={34} className="mx-auto text-gray-300" />
+                          <p className="mt-4 font-black text-gray-900 dark:text-white">Checklist ainda não criado</p>
+                          <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Crie o checklist para acompanhar contrato, pagamento, briefing, documentos, cronograma e equipe.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <aside className="rounded-[32px] border border-teal-100 bg-teal-50 p-6 dark:border-teal-900/50 dark:bg-teal-950/20">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Preparação</p>
+                    <p className="mt-3 text-3xl font-black text-gray-900 dark:text-white">{selectedChecklistProgress}%</p>
+                    <div className="mt-5 h-3 overflow-hidden rounded-full bg-white dark:bg-gray-950">
+                      <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${selectedChecklistProgress}%` }} />
+                    </div>
+                    <p className="mt-4 text-sm font-semibold leading-6 text-gray-600 dark:text-gray-300">
+                      {selectedChecklist.length
+                        ? `${selectedChecklistDone} de ${selectedChecklist.length} itens concluídos.`
+                        : 'Crie o checklist para liberar o acompanhamento da transição para obra.'}
+                    </p>
+                    {selectedChecklist.length > 0 && selectedChecklistDone === selectedChecklist.length && (
+                      <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+                        <p className="text-[10px] font-black uppercase tracking-widest">Pronto para execução</p>
+                        <p className="mt-1 text-sm font-bold">Todos os itens de partida foram concluídos.</p>
+                      </div>
+                    )}
                   </aside>
                 </div>
               )}
