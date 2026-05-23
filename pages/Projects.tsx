@@ -117,6 +117,44 @@ interface ExecutionTask {
    createdAt: string;
 }
 
+type ProjectDocumentCategory =
+   | 'alvaras_licencas'
+   | 'contratos'
+   | 'art_rrt'
+   | 'projetos_executivos'
+   | 'laudos_tecnicos'
+   | 'certificados_garantia'
+   | 'notas_fiscais'
+   | 'garantias_manuais'
+   | 'entrega_obra';
+
+interface ProjectDocument {
+   id: string;
+   projectId?: string;
+   clientId?: string;
+   category: ProjectDocumentCategory;
+   name: string;
+   description?: string;
+   filePath?: string;
+   fileType?: string;
+   fileSize: number;
+   uploadedAt: string;
+   validUntil?: string;
+   validityStatus: 'valido' | 'proximo_vencimento' | 'vencido';
+}
+
+const PROJECT_DOCUMENT_CATEGORIES: { value: ProjectDocumentCategory; label: string; description: string }[] = [
+   { value: 'contratos', label: 'Contrato', description: 'Contrato, aditivo ou termo assinado.' },
+   { value: 'art_rrt', label: 'ART / RRT', description: 'Responsabilidade técnica e registros profissionais.' },
+   { value: 'alvaras_licencas', label: 'Alvarás', description: 'Licenças, autorizações e documentos legais.' },
+   { value: 'projetos_executivos', label: 'Projetos', description: 'Plantas, memoriais e arquivos executivos.' },
+   { value: 'laudos_tecnicos', label: 'Laudos', description: 'Relatórios técnicos, inspeções e pareceres.' },
+   { value: 'notas_fiscais', label: 'Notas fiscais', description: 'Notas, recibos e comprovantes fiscais.' },
+   { value: 'garantias_manuais', label: 'Garantias', description: 'Garantias, manuais e certificados de produto.' },
+   { value: 'entrega_obra', label: 'Entrega', description: 'Termo de entrega, fotos finais e aceite.' },
+   { value: 'certificados_garantia', label: 'Certificados', description: 'Certificados e garantias formais.' }
+];
+
 const EXECUTION_PLAN_TEMPLATE = [
    {
       title: 'Kickoff e alinhamento de obra',
@@ -229,14 +267,16 @@ const Projects: React.FC = () => {
    const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
    const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
    const [executionTasks, setExecutionTasks] = useState<ExecutionTask[]>([]);
+   const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
 
    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'tasks' | 'diary' | 'finance' | 'quality'>('overview');
+   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'tasks' | 'diary' | 'documents' | 'finance' | 'quality'>('overview');
    const [showBatchModal, setShowBatchModal] = useState(false);
    const [showFiscalModal, setShowFiscalModal] = useState(false);
    const [isCreatingPlan, setIsCreatingPlan] = useState(false);
    const [isSavingDailyReport, setIsSavingDailyReport] = useState(false);
    const [isSavingExecutionTask, setIsSavingExecutionTask] = useState(false);
+   const [isSavingDocument, setIsSavingDocument] = useState(false);
    const [clientReportDays, setClientReportDays] = useState<'7' | '15' | '30' | 'all'>('7');
    const [dailyPhotoFiles, setDailyPhotoFiles] = useState<DailyPhotoPreview[]>([]);
    const [dailyPhotoUrls, setDailyPhotoUrls] = useState<Record<string, string>>({});
@@ -260,6 +300,13 @@ const Projects: React.FC = () => {
       completedTaskIds: [] as string[],
       photosText: ''
    });
+   const [documentForm, setDocumentForm] = useState({
+      category: 'contratos' as ProjectDocumentCategory,
+      name: '',
+      description: '',
+      validUntil: ''
+   });
+   const [documentFile, setDocumentFile] = useState<File | null>(null);
 
    // Estados para Módulo de Qualidade
    const [showInspectionModal, setShowInspectionModal] = useState(false);
@@ -327,6 +374,18 @@ const Projects: React.FC = () => {
       : 0;
    const overdueTasks = selectedProjectTasks.filter(task => task.status !== 'done' && task.dueDate && task.dueDate < new Date().toISOString().split('T')[0]);
    const openExecutionTasks = selectedProjectTasks.filter(task => task.status !== 'done');
+   const selectedProjectDocuments = useMemo(() => {
+      if (!selectedProject) return [];
+      return projectDocuments
+         .filter(document => document.projectId === selectedProject.id)
+         .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+   }, [selectedProject, projectDocuments]);
+   const documentsByCategory = PROJECT_DOCUMENT_CATEGORIES.map(category => ({
+      ...category,
+      count: selectedProjectDocuments.filter(document => document.category === category.value).length
+   }));
+   const expiredDocuments = selectedProjectDocuments.filter(document => document.validityStatus === 'vencido').length;
+   const expiringDocuments = selectedProjectDocuments.filter(document => document.validityStatus === 'proximo_vencimento').length;
    const selectedProjectReports = useMemo(() => {
       if (!selectedProject) return [];
       return dailyReports
@@ -387,6 +446,7 @@ const Projects: React.FC = () => {
          fetchScheduleEvents(selectedProject.id);
          fetchDailyReports(selectedProject.id);
          fetchExecutionTasks(selectedProject.id);
+         fetchProjectDocuments(selectedProject.id);
       }
    }, [selectedProject]);
 
@@ -520,6 +580,159 @@ const Projects: React.FC = () => {
             createdAt: task.created_at
          }))
       ]);
+   };
+
+   const fetchProjectDocuments = async (projectId: string) => {
+      const { data, error } = await supabase
+         .from('documents')
+         .select('*')
+         .eq('project_id', projectId)
+         .order('data_upload', { ascending: false });
+
+      if (error) {
+         console.warn('Dossiê de documentos indisponível:', error.message);
+         return;
+      }
+
+      setProjectDocuments(prev => [
+         ...prev.filter(document => document.projectId !== projectId),
+         ...(data || []).map((document: any) => ({
+            id: document.id,
+            projectId: document.project_id || '',
+            clientId: document.client_id || '',
+            category: document.categoria,
+            name: document.nome,
+            description: document.descricao || '',
+            filePath: document.arquivo_url || '',
+            fileType: document.tipo_arquivo || '',
+            fileSize: Number(document.tamanho_bytes || 0),
+            uploadedAt: document.data_upload || document.created_at,
+            validUntil: document.data_validade || '',
+            validityStatus: document.status_validade || 'valido'
+         }))
+      ]);
+   };
+
+   const resetDocumentForm = () => {
+      setDocumentForm({
+         category: 'contratos',
+         name: '',
+         description: '',
+         validUntil: ''
+      });
+      setDocumentFile(null);
+   };
+
+   const getDocumentCategoryLabel = (category: ProjectDocumentCategory) =>
+      PROJECT_DOCUMENT_CATEGORIES.find(item => item.value === category)?.label || category;
+
+   const formatFileSize = (bytes: number) => {
+      if (!bytes) return '0 KB';
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+   };
+
+   const getDocumentValidityStatus = (validUntil?: string): ProjectDocument['validityStatus'] => {
+      if (!validUntil) return 'valido';
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const targetDate = new Date(`${validUntil}T00:00:00`);
+      const daysUntilExpiry = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysUntilExpiry < 0) return 'vencido';
+      if (daysUntilExpiry <= 30) return 'proximo_vencimento';
+      return 'valido';
+   };
+
+   const handleSaveProjectDocument = async () => {
+      if (!selectedProject || !user?.id || !documentFile) return;
+
+      setIsSavingDocument(true);
+      const fileName = documentForm.name.trim() || documentFile.name;
+      const filePath = `${user.id}/${selectedProject.id}/${Date.now()}-${sanitizeFileName(documentFile.name)}`;
+
+      try {
+         const { error: uploadError } = await withTimeout(
+            supabase.storage.from('project-documents').upload(filePath, documentFile, {
+               cacheControl: '3600',
+               upsert: false
+            }),
+            45000,
+            'Tempo esgotado ao enviar o documento. Verifique sua conexão e tente novamente.'
+         );
+
+         if (uploadError) {
+            throw new Error(uploadError.message || 'Storage recusou o envio do documento.');
+         }
+
+         const { error } = await supabase.from('documents').insert([{
+            user_id: user.id,
+            client_id: selectedProject.clientId || null,
+            project_id: selectedProject.id,
+            categoria: documentForm.category,
+            nome: fileName,
+            descricao: documentForm.description.trim() || null,
+            arquivo_url: filePath,
+            tipo_arquivo: documentFile.type || null,
+            tamanho_bytes: documentFile.size,
+            data_validade: documentForm.validUntil || null,
+            status_validade: getDocumentValidityStatus(documentForm.validUntil)
+         }]);
+
+         if (error) {
+            await supabase.storage.from('project-documents').remove([filePath]);
+            throw new Error(error.message);
+         }
+
+         await fetchProjectDocuments(selectedProject.id);
+         resetDocumentForm();
+         setMessage({ text: 'Documento anexado ao dossiê da obra.', type: 'success' });
+         setTimeout(() => setMessage(null), 3500);
+      } catch (error: any) {
+         setMessage({ text: `Erro ao salvar documento. Aplique a migration 00011 no Supabase. ${error?.message || ''}`, type: 'error' });
+         setTimeout(() => setMessage(null), 7000);
+      } finally {
+         setIsSavingDocument(false);
+      }
+   };
+
+   const handleOpenProjectDocument = async (document: ProjectDocument) => {
+      if (!document.filePath) return;
+
+      try {
+         const { data, error } = await supabase.storage
+            .from('project-documents')
+            .createSignedUrl(document.filePath, 60 * 60);
+
+         if (error || !data?.signedUrl) {
+            throw new Error(error?.message || 'Não foi possível gerar link temporário.');
+         }
+
+         window.open(data.signedUrl, '_blank');
+      } catch (error: any) {
+         setMessage({ text: 'Erro ao abrir documento: ' + (error?.message || 'link indisponível'), type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+      }
+   };
+
+   const handleDeleteProjectDocument = async (document: ProjectDocument) => {
+      if (!selectedProject) return;
+
+      const { error } = await supabase.from('documents').delete().eq('id', document.id);
+      if (error) {
+         setMessage({ text: 'Erro ao excluir documento: ' + error.message, type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      if (document.filePath) {
+         await supabase.storage.from('project-documents').remove([document.filePath]);
+      }
+
+      await fetchProjectDocuments(selectedProject.id);
+      setMessage({ text: 'Documento removido do dossiê.', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
    };
 
    const resetExecutionTaskForm = () => {
@@ -1550,6 +1763,13 @@ const Projects: React.FC = () => {
                            {activeTab === 'diary' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                         <button
+                           onClick={() => setActiveTab('documents')}
+                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'documents' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                           Documentos
+                           {activeTab === 'documents' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
+                        </button>
+                        <button
                            onClick={() => setActiveTab('finance')}
                            className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'finance' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
                         >
@@ -2264,6 +2484,170 @@ const Projects: React.FC = () => {
                                        <ClipboardCheck size={34} className="mx-auto text-gray-300" />
                                        <p className="mt-4 font-black text-gray-900 dark:text-white">Nenhum diário registrado</p>
                                        <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Crie o primeiro relatório para documentar o andamento da obra.</p>
+                                    </div>
+                                 )}
+                              </div>
+                           </div>
+                        </div>
+                     )}
+
+                     {activeTab === 'documents' && (
+                        <div className="grid gap-6 lg:grid-cols-[420px_1fr] animate-in fade-in duration-300">
+                           <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-950">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Dossiê da obra</p>
+                              <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Novo documento</h3>
+                              <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Guarde contratos, ART/RRT, alvarás, projetos, notas, garantias e entrega final em um só lugar.</p>
+
+                              <div className="mt-6 space-y-4">
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Categoria</label>
+                                    <select
+                                       value={documentForm.category}
+                                       onChange={(e) => setDocumentForm({ ...documentForm, category: e.target.value as ProjectDocumentCategory })}
+                                       className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    >
+                                       {PROJECT_DOCUMENT_CATEGORIES.map(category => (
+                                          <option key={category.value} value={category.value}>{category.label}</option>
+                                       ))}
+                                    </select>
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nome do documento</label>
+                                    <input
+                                       value={documentForm.name}
+                                       onChange={(e) => setDocumentForm({ ...documentForm, name: e.target.value })}
+                                       placeholder="Ex: ART da reforma, contrato assinado..."
+                                       className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Descrição</label>
+                                    <textarea
+                                       value={documentForm.description}
+                                       onChange={(e) => setDocumentForm({ ...documentForm, description: e.target.value })}
+                                       placeholder="Observações internas, número do documento, fornecedor ou contexto..."
+                                       className="mt-2 h-20 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Validade</label>
+                                    <input
+                                       type="date"
+                                       value={documentForm.validUntil}
+                                       onChange={(e) => setDocumentForm({ ...documentForm, validUntil: e.target.value })}
+                                       className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white px-4 py-5 text-center transition hover:border-teal-500 hover:bg-teal-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-teal-700 dark:hover:bg-teal-900/20">
+                                    <FileText size={26} className="text-teal-600" />
+                                    <span className="mt-2 text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">{documentFile ? documentFile.name : 'Anexar arquivo'}</span>
+                                    <span className="mt-1 text-[11px] font-bold text-gray-400">PDF, imagens, Word ou Excel até 20MB</span>
+                                    <input
+                                       type="file"
+                                       accept="application/pdf,image/png,image/jpeg,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                       className="hidden"
+                                       onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+                                    />
+                                 </label>
+
+                                 <button
+                                    onClick={handleSaveProjectDocument}
+                                    disabled={!documentFile || isSavingDocument}
+                                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                 >
+                                    {isSavingDocument ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                    {isSavingDocument ? 'Enviando...' : 'Salvar no dossiê'}
+                                 </button>
+                              </div>
+                           </div>
+
+                           <div className="space-y-6">
+                              <div className="rounded-[32px] border border-teal-100 bg-teal-50 p-6 dark:border-teal-900/50 dark:bg-teal-950/20">
+                                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                       <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Arquivo técnico</p>
+                                       <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Documentos da obra</h3>
+                                       <p className="mt-1 text-sm font-semibold text-gray-600 dark:text-gray-300">
+                                          {selectedProjectDocuments.length} documento(s). {expiredDocuments ? `${expiredDocuments} vencido(s).` : expiringDocuments ? `${expiringDocuments} próximo(s) do vencimento.` : 'Sem vencimentos críticos.'}
+                                       </p>
+                                    </div>
+                                    <div className="rounded-3xl bg-white px-6 py-4 text-center dark:bg-gray-950">
+                                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Dossiê</p>
+                                       <p className="mt-1 text-3xl font-black text-teal-600">{selectedProjectDocuments.length}</p>
+                                    </div>
+                                 </div>
+                              </div>
+
+                              <div className="grid gap-3 sm:grid-cols-3">
+                                 {documentsByCategory.filter(category => category.count > 0).map(category => (
+                                    <div key={category.value} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+                                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{category.label}</p>
+                                       <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{category.count}</p>
+                                    </div>
+                                 ))}
+                              </div>
+
+                              <div className="space-y-3">
+                                 {selectedProjectDocuments.length ? (
+                                    selectedProjectDocuments.map(document => {
+                                       const validityLabel = document.validityStatus === 'valido'
+                                          ? 'Válido'
+                                          : document.validityStatus === 'proximo_vencimento'
+                                             ? 'Vence em breve'
+                                             : 'Vencido';
+                                       return (
+                                          <article key={document.id} className="rounded-3xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+                                             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                                <div className="flex gap-4">
+                                                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 dark:bg-teal-900/20 dark:text-teal-300">
+                                                      <FileText size={22} />
+                                                   </div>
+                                                   <div>
+                                                      <div className="flex flex-wrap gap-2">
+                                                         <span className="rounded-full bg-teal-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{getDocumentCategoryLabel(document.category)}</span>
+                                                         <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
+                                                            document.validityStatus === 'vencido'
+                                                               ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+                                                               : document.validityStatus === 'proximo_vencimento'
+                                                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                                                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                                         }`}>{validityLabel}</span>
+                                                      </div>
+                                                      <h4 className="mt-3 font-black text-gray-900 dark:text-white">{document.name}</h4>
+                                                      {document.description && <p className="mt-2 text-sm font-semibold leading-6 text-gray-500 dark:text-gray-400">{document.description}</p>}
+                                                      <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                         {formatFileSize(document.fileSize)} · Enviado em {new Date(document.uploadedAt).toLocaleDateString()}
+                                                         {document.validUntil ? ` · Validade: ${new Date(`${document.validUntil}T00:00:00`).toLocaleDateString()}` : ''}
+                                                      </p>
+                                                   </div>
+                                                </div>
+                                                <div className="flex shrink-0 gap-2">
+                                                   <button
+                                                      onClick={() => handleOpenProjectDocument(document)}
+                                                      className="rounded-xl bg-gray-950 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white transition hover:opacity-90 dark:bg-white dark:text-gray-950"
+                                                   >
+                                                      Abrir
+                                                   </button>
+                                                   <button
+                                                      onClick={() => handleDeleteProjectDocument(document)}
+                                                      className="rounded-xl bg-rose-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-rose-700 transition hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-300"
+                                                   >
+                                                      Remover
+                                                   </button>
+                                                </div>
+                                             </div>
+                                          </article>
+                                       );
+                                    })
+                                 ) : (
+                                    <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+                                       <FileText size={34} className="mx-auto text-gray-300" />
+                                       <p className="mt-4 font-black text-gray-900 dark:text-white">Nenhum documento anexado</p>
+                                       <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Comece anexando contrato, ART/RRT, alvará ou projeto executivo.</p>
                                     </div>
                                  )}
                               </div>
