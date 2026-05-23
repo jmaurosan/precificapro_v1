@@ -307,6 +307,10 @@ const Projects: React.FC = () => {
       validUntil: ''
    });
    const [documentFile, setDocumentFile] = useState<File | null>(null);
+   const [responsibleForm, setResponsibleForm] = useState({
+      name: '',
+      phone: ''
+   });
 
    // Estados para Módulo de Qualidade
    const [showInspectionModal, setShowInspectionModal] = useState(false);
@@ -447,6 +451,10 @@ const Projects: React.FC = () => {
          fetchDailyReports(selectedProject.id);
          fetchExecutionTasks(selectedProject.id);
          fetchProjectDocuments(selectedProject.id);
+         setResponsibleForm({
+            name: selectedProject.responsibleName || '',
+            phone: selectedProject.responsiblePhone || ''
+         });
       }
    }, [selectedProject]);
 
@@ -496,6 +504,8 @@ const Projects: React.FC = () => {
             totalBudget: Number(p.total_budget),
             spentAmount: Number(p.spent_amount),
             startDate: p.start_date,
+            responsibleName: p.responsible_name || '',
+            responsiblePhone: p.responsible_phone || '',
             nonConformities: p.non_conformities
          })) as Project[]);
       }
@@ -611,6 +621,45 @@ const Projects: React.FC = () => {
             validityStatus: document.status_validade || 'valido'
          }))
       ]);
+   };
+
+   const handleSaveProjectResponsible = async () => {
+      if (!selectedProject) return;
+
+      const { error } = await supabase
+         .from('projects')
+         .update({
+            responsible_name: responsibleForm.name.trim() || null,
+            responsible_phone: responsibleForm.phone.trim() || null
+         })
+         .eq('id', selectedProject.id);
+
+      if (error) {
+         setMessage({ text: 'Erro ao salvar responsável. Aplique a migration 00012 no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+         return;
+      }
+
+      const updatedProject = {
+         ...selectedProject,
+         responsibleName: responsibleForm.name.trim(),
+         responsiblePhone: responsibleForm.phone.trim()
+      };
+      setSelectedProject(updatedProject);
+      setProjects(prev => prev.map(project => project.id === selectedProject.id ? updatedProject : project));
+      setMessage({ text: 'Responsável da obra atualizado.', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
+   };
+
+   const handleSendProjectResponsibleWhatsapp = (message: string) => {
+      const phone = selectedProject?.responsiblePhone || responsibleForm.phone;
+      if (!phone) {
+         setMessage({ text: 'Informe o telefone do responsável da obra antes de enviar aviso.', type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      window.open(createWhatsappLink(phone, message), '_blank');
    };
 
    const resetDocumentForm = () => {
@@ -1701,14 +1750,47 @@ const Projects: React.FC = () => {
                         <div className="flex items-center gap-3 mt-1">
                            <span className="px-4 py-1.5 bg-teal-50 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 rounded-full text-[10px] font-black uppercase tracking-widest">Cliente: {selectedProject.clientName}</span>
                            <button
-                              onClick={() => window.open(createWhatsappLink('11999999999', `Olá ${selectedProject.clientName}, atualizações sobre a obra *${selectedProject.name}*.`), '_blank')}
+                              onClick={() => handleSendProjectResponsibleWhatsapp(`Olá ${selectedProject.responsibleName || 'responsável'}, segue atualização sobre a obra *${selectedProject.name}*.`)}
                               className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
-                              title="Contatar via WhatsApp"
+                              title="Avisar responsável por WhatsApp"
                            >
                               <MessageCircle size={14} />
                            </button>
                         </div>
                      </div>
+                  </div>
+                  <div className="mb-6 grid gap-3 rounded-[32px] border border-teal-100 bg-teal-50 p-4 dark:border-teal-900/40 dark:bg-teal-950/20 md:grid-cols-[1fr_1fr_auto_auto]">
+                     <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Responsável da obra</label>
+                        <input
+                           value={responsibleForm.name}
+                           onChange={(e) => setResponsibleForm({ ...responsibleForm, name: e.target.value })}
+                           placeholder="Nome do responsável"
+                           className="mt-2 w-full rounded-2xl border border-teal-100 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none dark:border-teal-900 dark:bg-gray-950 dark:text-white"
+                        />
+                     </div>
+                     <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">WhatsApp</label>
+                        <input
+                           value={responsibleForm.phone}
+                           onChange={(e) => setResponsibleForm({ ...responsibleForm, phone: e.target.value })}
+                           placeholder="(00) 00000-0000"
+                           className="mt-2 w-full rounded-2xl border border-teal-100 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none dark:border-teal-900 dark:bg-gray-950 dark:text-white"
+                        />
+                     </div>
+                     <button
+                        onClick={handleSaveProjectResponsible}
+                        className="self-end rounded-2xl bg-teal-600 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-teal-700"
+                     >
+                        Salvar
+                     </button>
+                     <button
+                        onClick={() => handleSendProjectResponsibleWhatsapp(`Olá ${responsibleForm.name || 'responsável'}, este é um aviso sobre a obra *${selectedProject.name}*.`)}
+                        className="inline-flex items-center justify-center gap-2 self-end rounded-2xl bg-emerald-600 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-emerald-700"
+                     >
+                        <MessageCircle size={15} />
+                        Avisar
+                     </button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                      <div className="p-6 bg-gray-50 dark:bg-gray-800/40 rounded-[32px]"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Budget Contratado</p><p className="text-2xl font-black text-gray-900 dark:text-white">R$ {selectedProject.totalBudget.toLocaleString('pt-BR')}</p></div>

@@ -8,6 +8,7 @@ import {
    ChevronRight,
    FileText,
    Hammer,
+   MessageCircle,
    PieChart,
    Plus,
    Receipt,
@@ -20,6 +21,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
+import { createWhatsappLink } from '../utils/whatsapp';
 
 // Módulos do sistema com ícones
 const modules = [
@@ -43,6 +45,7 @@ const Dashboard: React.FC = () => {
    const [totalGastos, setTotalGastos] = useState(0);
    const [proposalCount, setProposalCount] = useState(0);
    const [recentProposals, setRecentProposals] = useState<any[]>([]);
+   const [operationalAlerts, setOperationalAlerts] = useState<any[]>([]);
    const [commercialStats, setCommercialStats] = useState({
       totalLeads: 0,
       leadsNovo: 0,
@@ -79,11 +82,15 @@ const Dashboard: React.FC = () => {
             budget: Number(p.total_budget),
             spent: Number(p.spent_amount),
             progress: p.total_budget > 0 ? Math.round((Number(p.spent_amount) / Number(p.total_budget)) * 100) : 0,
-            status: Number(p.spent_amount) > Number(p.total_budget) ? 'warning' : 'active'
+            status: Number(p.spent_amount) > Number(p.total_budget) ? 'warning' : 'active',
+            responsibleName: p.responsible_name || '',
+            responsiblePhone: p.responsible_phone || ''
          })));
          setTotalReceita(projectsData.reduce((a, p) => a + Number(p.total_budget), 0));
          setTotalGastos(projectsData.reduce((a, p) => a + Number(p.spent_amount), 0));
       }
+
+      await fetchOperationalAlerts(projectsData || []);
 
       const { data: proposalsData } = await supabase
          .from('proposals')
@@ -116,6 +123,94 @@ const Dashboard: React.FC = () => {
          conversao: oportunidadesFinalizadas > 0 ? Math.round((contratados / oportunidadesFinalizadas) * 100) : 0,
       });
       setLoading(false);
+   };
+
+   const fetchOperationalAlerts = async (projectsData: any[]) => {
+      const projectMap = new Map(projectsData.map(project => [project.id, {
+         name: project.name,
+         responsibleName: project.responsible_name || '',
+         responsiblePhone: project.responsible_phone || ''
+      }]));
+      const today = new Date().toISOString().split('T')[0];
+      const nextLimit = new Date();
+      nextLimit.setDate(nextLimit.getDate() + 7);
+      const nextLimitDate = nextLimit.toISOString().split('T')[0];
+
+      const [{ data: tasksData }, { data: documentsData }, { data: scheduleData }] = await Promise.all([
+         supabase
+            .from('project_execution_tasks')
+            .select('id, project_id, title, due_date, status, responsible')
+            .neq('status', 'done')
+            .not('due_date', 'is', null)
+            .lte('due_date', nextLimitDate),
+         supabase
+            .from('documents')
+            .select('id, project_id, nome, data_validade, status_validade')
+            .not('project_id', 'is', null)
+            .or(`status_validade.eq.vencido,status_validade.eq.proximo_vencimento,data_validade.lte.${nextLimitDate}`),
+         supabase
+            .from('schedule_events')
+            .select('id, project_id, title, start_date, status')
+            .neq('status', 'completed')
+            .lte('start_date', nextLimitDate)
+            .order('start_date', { ascending: true })
+      ]);
+
+      const alerts = [
+         ...(tasksData || []).map(task => {
+            const project = projectMap.get(task.project_id);
+            const overdue = task.due_date < today;
+            return {
+               id: `task-${task.id}`,
+               type: overdue ? 'Tarefa atrasada' : 'Tarefa próxima',
+               severity: overdue ? 'high' : 'medium',
+               title: task.title,
+               subtitle: project?.name || 'Obra',
+               date: task.due_date,
+               responsibleName: project?.responsibleName || task.responsible || '',
+               responsiblePhone: project?.responsiblePhone || '',
+               message: `Olá ${project?.responsibleName || task.responsible || 'responsável'}, atenção para a obra *${project?.name || 'obra'}*: a tarefa *${task.title}* ${overdue ? 'está atrasada' : 'vence em breve'} (${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}).`
+            };
+         }),
+         ...(documentsData || []).map(document => {
+            const project = projectMap.get(document.project_id);
+            const overdue = document.data_validade && document.data_validade < today;
+            return {
+               id: `doc-${document.id}`,
+               type: overdue ? 'Documento vencido' : 'Documento a vencer',
+               severity: overdue ? 'high' : 'medium',
+               title: document.nome,
+               subtitle: project?.name || 'Obra',
+               date: document.data_validade,
+               responsibleName: project?.responsibleName || '',
+               responsiblePhone: project?.responsiblePhone || '',
+               message: `Olá ${project?.responsibleName || 'responsável'}, atenção para a obra *${project?.name || 'obra'}*: o documento *${document.nome}* ${overdue ? 'está vencido' : 'vence em breve'}${document.data_validade ? ` (${new Date(`${document.data_validade}T00:00:00`).toLocaleDateString()})` : ''}.`
+            };
+         }),
+         ...(scheduleData || []).map(event => {
+            const project = projectMap.get(event.project_id);
+            return {
+               id: `schedule-${event.id}`,
+               type: 'Marco próximo',
+               severity: 'low',
+               title: event.title,
+               subtitle: project?.name || 'Obra',
+               date: event.start_date,
+               responsibleName: project?.responsibleName || '',
+               responsiblePhone: project?.responsiblePhone || '',
+               message: `Olá ${project?.responsibleName || 'responsável'}, lembrete da obra *${project?.name || 'obra'}*: o marco *${event.title}* está previsto para ${new Date(`${event.start_date}T00:00:00`).toLocaleDateString()}.`
+            };
+         })
+      ];
+
+      setOperationalAlerts(alerts
+         .sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'))
+         .slice(0, 6));
+   };
+
+   const sendAlertWhatsapp = (alert: any) => {
+      if (!alert.responsiblePhone) return;
+      window.open(createWhatsappLink(alert.responsiblePhone, alert.message), '_blank');
    };
 
    const firstName = user?.name?.split(' ')[0] || 'Usuário';
@@ -248,6 +343,55 @@ const Dashboard: React.FC = () => {
                         <ChevronRight size={18} className="text-violet-500" />
                      </button>
                   )}
+               </div>
+            </div>
+         )}
+
+         {operationalAlerts.length > 0 && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 mb-6 border border-gray-100 dark:border-gray-800 shadow-sm">
+               <div className="flex items-center justify-between mb-4">
+                  <div>
+                     <h2 className="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest flex items-center gap-2">
+                        <AlertTriangle size={16} className="text-rose-500" /> Alertas de Obra
+                     </h2>
+                     <p className="text-xs font-bold text-gray-400 mt-1">Tarefas, documentos e marcos que precisam de atenção.</p>
+                  </div>
+                  <button
+                     onClick={() => navigate('/projects')}
+                     className="px-4 py-2 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-600 hover:text-white transition-all"
+                  >
+                     Ver obras
+                  </button>
+               </div>
+
+               <div className="space-y-3">
+                  {operationalAlerts.map(alert => (
+                     <div
+                        key={alert.id}
+                        className={`flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between ${
+                           alert.severity === 'high'
+                              ? 'bg-rose-50 border-rose-100 dark:bg-rose-900/10 dark:border-rose-900/30'
+                              : alert.severity === 'medium'
+                                 ? 'bg-amber-50 border-amber-100 dark:bg-amber-900/10 dark:border-amber-900/30'
+                                 : 'bg-teal-50 border-teal-100 dark:bg-teal-900/10 dark:border-teal-900/30'
+                        }`}
+                     >
+                        <button onClick={() => navigate('/projects')} className="min-w-0 flex-1 text-left">
+                           <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">{alert.type}</p>
+                           <p className="mt-1 truncate text-sm font-black text-gray-900 dark:text-white">{alert.title}</p>
+                           <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{alert.subtitle}{alert.date ? ` · ${new Date(`${alert.date}T00:00:00`).toLocaleDateString()}` : ''}</p>
+                        </button>
+                        <button
+                           onClick={() => sendAlertWhatsapp(alert)}
+                           disabled={!alert.responsiblePhone}
+                           className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-800"
+                           title={alert.responsiblePhone ? `Avisar ${alert.responsibleName || 'responsável'}` : 'Cadastre o WhatsApp do responsável na obra'}
+                        >
+                           <MessageCircle size={15} />
+                           Avisar WhatsApp
+                        </button>
+                     </div>
+                  ))}
                </div>
             </div>
          )}

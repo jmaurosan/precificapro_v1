@@ -165,6 +165,8 @@ export interface Project {
   totalBudget: number;
   spentAmount: number;
   startDate: string;
+  responsibleName?: string;
+  responsiblePhone?: string;
   status: 'active' | 'completed' | 'on_hold';
   inspections?: Inspection[];
   nonConformities?: NonConformity[];
