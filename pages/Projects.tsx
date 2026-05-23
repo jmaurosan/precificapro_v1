@@ -100,6 +100,21 @@ interface DailyPhotoPreview {
    url: string;
 }
 
+interface ExecutionTask {
+   id: string;
+   projectId: string;
+   scheduleEventId?: string;
+   title: string;
+   description?: string;
+   phase: string;
+   responsible?: string;
+   dueDate?: string;
+   priority: 'low' | 'medium' | 'high';
+   status: 'todo' | 'in_progress' | 'done' | 'blocked';
+   completedAt?: string;
+   createdAt: string;
+}
+
 const EXECUTION_PLAN_TEMPLATE = [
    {
       title: 'Kickoff e alinhamento de obra',
@@ -211,16 +226,26 @@ const Projects: React.FC = () => {
    const [custos, setCustos] = useState<CustoProjeto[]>([]);
    const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
    const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
+   const [executionTasks, setExecutionTasks] = useState<ExecutionTask[]>([]);
 
    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'diary' | 'finance' | 'quality'>('overview');
+   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'tasks' | 'diary' | 'finance' | 'quality'>('overview');
    const [showBatchModal, setShowBatchModal] = useState(false);
    const [showFiscalModal, setShowFiscalModal] = useState(false);
    const [isCreatingPlan, setIsCreatingPlan] = useState(false);
    const [isSavingDailyReport, setIsSavingDailyReport] = useState(false);
+   const [isSavingExecutionTask, setIsSavingExecutionTask] = useState(false);
    const [clientReportDays, setClientReportDays] = useState<'7' | '15' | '30' | 'all'>('7');
    const [dailyPhotoFiles, setDailyPhotoFiles] = useState<DailyPhotoPreview[]>([]);
    const [dailyPhotoUrls, setDailyPhotoUrls] = useState<Record<string, string>>({});
+   const [executionTaskForm, setExecutionTaskForm] = useState({
+      title: '',
+      description: '',
+      phase: '',
+      responsible: '',
+      dueDate: '',
+      priority: 'medium' as ExecutionTask['priority']
+   });
    const [dailyReportForm, setDailyReportForm] = useState({
       reportDate: new Date().toISOString().split('T')[0],
       weather: 'nao_informado' as DailyReport['weather'],
@@ -281,6 +306,22 @@ const Projects: React.FC = () => {
       ? Math.round((scheduleCompleted / selectedProjectSchedule.length) * 100)
       : 0;
    const nextScheduleEvent = selectedProjectSchedule.find(event => event.status !== 'completed');
+   const selectedProjectTasks = useMemo(() => {
+      if (!selectedProject) return [];
+      return executionTasks
+         .filter(task => task.projectId === selectedProject.id)
+         .sort((a, b) => {
+            if (a.status === 'done' && b.status !== 'done') return 1;
+            if (a.status !== 'done' && b.status === 'done') return -1;
+            return (a.dueDate || '9999-12-31').localeCompare(b.dueDate || '9999-12-31');
+         });
+   }, [selectedProject, executionTasks]);
+   const taskCompleted = selectedProjectTasks.filter(task => task.status === 'done').length;
+   const taskBlocked = selectedProjectTasks.filter(task => task.status === 'blocked').length;
+   const taskProgress = selectedProjectTasks.length
+      ? Math.round((taskCompleted / selectedProjectTasks.length) * 100)
+      : 0;
+   const overdueTasks = selectedProjectTasks.filter(task => task.status !== 'done' && task.dueDate && task.dueDate < new Date().toISOString().split('T')[0]);
    const selectedProjectReports = useMemo(() => {
       if (!selectedProject) return [];
       return dailyReports
@@ -313,6 +354,7 @@ const Projects: React.FC = () => {
          fetchCosts(selectedProject.id);
          fetchScheduleEvents(selectedProject.id);
          fetchDailyReports(selectedProject.id);
+         fetchExecutionTasks(selectedProject.id);
       }
    }, [selectedProject]);
 
@@ -414,6 +456,154 @@ const Projects: React.FC = () => {
             color: event.color
          }))
       ]);
+   };
+
+   const fetchExecutionTasks = async (projectId: string) => {
+      const { data, error } = await supabase
+         .from('project_execution_tasks')
+         .select('*')
+         .eq('project_id', projectId)
+         .order('due_date', { ascending: true, nullsFirst: false })
+         .order('created_at', { ascending: false });
+
+      if (error) {
+         console.warn('Tarefas de execução indisponíveis:', error.message);
+         return;
+      }
+
+      setExecutionTasks(prev => [
+         ...prev.filter(task => task.projectId !== projectId),
+         ...(data || []).map((task: any) => ({
+            id: task.id,
+            projectId: task.project_id,
+            scheduleEventId: task.schedule_event_id || '',
+            title: task.title,
+            description: task.description || '',
+            phase: task.phase || 'Geral',
+            responsible: task.responsible || '',
+            dueDate: task.due_date || '',
+            priority: task.priority,
+            status: task.status,
+            completedAt: task.completed_at || '',
+            createdAt: task.created_at
+         }))
+      ]);
+   };
+
+   const resetExecutionTaskForm = () => {
+      setExecutionTaskForm({
+         title: '',
+         description: '',
+         phase: selectedProjectSchedule[0]?.title || '',
+         responsible: '',
+         dueDate: '',
+         priority: 'medium'
+      });
+   };
+
+   const handleSaveExecutionTask = async () => {
+      if (!selectedProject || !user?.id || !executionTaskForm.title.trim()) return;
+
+      setIsSavingExecutionTask(true);
+      const matchedSchedule = selectedProjectSchedule.find(event => event.title === executionTaskForm.phase);
+      const { error } = await supabase.from('project_execution_tasks').insert([{
+         user_id: user.id,
+         project_id: selectedProject.id,
+         schedule_event_id: matchedSchedule?.id || null,
+         title: executionTaskForm.title.trim(),
+         description: executionTaskForm.description.trim() || null,
+         phase: executionTaskForm.phase || 'Geral',
+         responsible: executionTaskForm.responsible.trim() || null,
+         due_date: executionTaskForm.dueDate || null,
+         priority: executionTaskForm.priority,
+         status: 'todo'
+      }]);
+
+      if (error) {
+         setMessage({ text: 'Erro ao salvar tarefa. Aplique a migration 00009 no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+      } else {
+         await fetchExecutionTasks(selectedProject.id);
+         resetExecutionTaskForm();
+         setMessage({ text: 'Tarefa de execução criada com sucesso.', type: 'success' });
+         setTimeout(() => setMessage(null), 3500);
+      }
+
+      setIsSavingExecutionTask(false);
+   };
+
+   const handleUpdateExecutionTaskStatus = async (task: ExecutionTask, status: ExecutionTask['status']) => {
+      if (!selectedProject) return;
+
+      const { error } = await supabase
+         .from('project_execution_tasks')
+         .update({
+            status,
+            completed_at: status === 'done' ? new Date().toISOString() : null
+         })
+         .eq('id', task.id);
+
+      if (error) {
+         setMessage({ text: 'Erro ao atualizar tarefa: ' + error.message, type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      await fetchExecutionTasks(selectedProject.id);
+   };
+
+   const handleCreateDefaultExecutionTasks = async () => {
+      if (!selectedProject || !user?.id) return;
+
+      const sourceEvents = selectedProjectSchedule.length ? selectedProjectSchedule : [];
+      if (!sourceEvents.length) {
+         setMessage({ text: 'Gere o plano de execução primeiro para criar tarefas por etapa.', type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      const existingTitles = new Set(selectedProjectTasks.map(task => `${task.phase}::${task.title}`.toLowerCase()));
+      const taskBlueprints = sourceEvents.flatMap(event => [
+         {
+            title: `Preparar recursos para ${event.title}`,
+            description: 'Confirmar materiais, equipe, acesso ao imóvel e condições para iniciar a etapa.',
+            phase: event.title,
+            schedule_event_id: event.id,
+            due_date: event.startDate,
+            priority: 'medium' as ExecutionTask['priority']
+         },
+         {
+            title: `Validar entrega da etapa ${event.title}`,
+            description: 'Conferir execução, registrar evidências no diário de obra e liberar próxima frente.',
+            phase: event.title,
+            schedule_event_id: event.id,
+            due_date: event.endDate,
+            priority: 'high' as ExecutionTask['priority']
+         }
+      ]).filter(task => !existingTitles.has(`${task.phase}::${task.title}`.toLowerCase()));
+
+      if (!taskBlueprints.length) {
+         setMessage({ text: 'As tarefas padrão desta obra já foram criadas.', type: 'success' });
+         setTimeout(() => setMessage(null), 3500);
+         return;
+      }
+
+      const { error } = await supabase.from('project_execution_tasks').insert(taskBlueprints.map(task => ({
+         user_id: user.id,
+         project_id: selectedProject.id,
+         ...task,
+         status: 'todo'
+      })));
+
+      if (error) {
+         setMessage({ text: 'Erro ao gerar tarefas. Aplique a migration 00009 no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+         return;
+      }
+
+      await fetchExecutionTasks(selectedProject.id);
+      setMessage({ text: 'Checklist de execução criado a partir do cronograma.', type: 'success' });
+      setTimeout(() => setMessage(null), 3500);
    };
 
    const handleCreateExecutionPlan = async () => {
@@ -1267,6 +1457,13 @@ const Projects: React.FC = () => {
                            {activeTab === 'timeline' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                         <button
+                           onClick={() => setActiveTab('tasks')}
+                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'tasks' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                           Tarefas
+                           {activeTab === 'tasks' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
+                        </button>
+                        <button
                            onClick={() => setActiveTab('diary')}
                            className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'diary' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
                         >
@@ -1313,16 +1510,16 @@ const Projects: React.FC = () => {
                                     <p className="mt-1 text-xs font-bold text-gray-500">{scheduleCompleted} de {selectedProjectSchedule.length} etapas concluídas</p>
                                  </div>
                                  <div className="rounded-3xl bg-white p-5 dark:bg-gray-900">
-                                    <DollarSign size={22} className="text-emerald-600" />
-                                    <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Realizado</p>
-                                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">R$ {resumo?.custosReais.toLocaleString('pt-BR')}</p>
-                                    <p className="mt-1 text-xs font-bold text-gray-500">Custos pagos ou confirmados</p>
+                                    <CheckCircle2 size={22} className="text-emerald-600" />
+                                    <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Tarefas</p>
+                                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{taskProgress}%</p>
+                                    <p className="mt-1 text-xs font-bold text-gray-500">{taskCompleted} de {selectedProjectTasks.length} tarefas concluídas</p>
                                  </div>
                                  <div className="rounded-3xl bg-white p-5 dark:bg-gray-900">
                                     <ClipboardCheck size={22} className="text-rose-500" />
                                     <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Pendências</p>
-                                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{(selectedProject.nonConformities || []).filter(item => item.status !== 'resolved').length}</p>
-                                    <p className="mt-1 text-xs font-bold text-gray-500">Não-conformidades abertas</p>
+                                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{taskBlocked + overdueTasks.length}</p>
+                                    <p className="mt-1 text-xs font-bold text-gray-500">Bloqueadas ou vencidas</p>
                                  </div>
                                  <div className="rounded-3xl bg-white p-5 dark:bg-gray-900">
                                     <ClipboardCheck size={22} className="text-sky-600" />
@@ -1436,6 +1633,205 @@ const Projects: React.FC = () => {
                                     : 'O progresso aparecerá quando o roteiro da obra for criado.'}
                               </p>
                            </aside>
+                        </div>
+                     )}
+
+                     {activeTab === 'tasks' && (
+                        <div className="grid gap-6 lg:grid-cols-[420px_1fr] animate-in fade-in duration-300">
+                           <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-950">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Checklist operacional</p>
+                              <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Nova tarefa de execução</h3>
+                              <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Transforme cada etapa da obra em ações com responsável, prazo e prioridade.</p>
+
+                              <div className="mt-6 space-y-4">
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Título da tarefa</label>
+                                    <input
+                                       value={executionTaskForm.title}
+                                       onChange={(e) => setExecutionTaskForm({ ...executionTaskForm, title: e.target.value })}
+                                       placeholder="Ex: Conferir pontos hidráulicos antes do fechamento"
+                                       className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Etapa</label>
+                                       <select
+                                          value={executionTaskForm.phase}
+                                          onChange={(e) => setExecutionTaskForm({ ...executionTaskForm, phase: e.target.value })}
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       >
+                                          <option value="">Geral</option>
+                                          {selectedProjectSchedule.map(event => (
+                                             <option key={event.id} value={event.title}>{event.title}</option>
+                                          ))}
+                                       </select>
+                                    </div>
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Prioridade</label>
+                                       <select
+                                          value={executionTaskForm.priority}
+                                          onChange={(e) => setExecutionTaskForm({ ...executionTaskForm, priority: e.target.value as ExecutionTask['priority'] })}
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       >
+                                          <option value="low">Baixa</option>
+                                          <option value="medium">Média</option>
+                                          <option value="high">Alta</option>
+                                       </select>
+                                    </div>
+                                 </div>
+
+                                 <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Responsável</label>
+                                       <input
+                                          value={executionTaskForm.responsible}
+                                          onChange={(e) => setExecutionTaskForm({ ...executionTaskForm, responsible: e.target.value })}
+                                          placeholder="Ex: João / equipe elétrica"
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       />
+                                    </div>
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Prazo</label>
+                                       <input
+                                          type="date"
+                                          value={executionTaskForm.dueDate}
+                                          onChange={(e) => setExecutionTaskForm({ ...executionTaskForm, dueDate: e.target.value })}
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       />
+                                    </div>
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Descrição / critério de aceite</label>
+                                    <textarea
+                                       value={executionTaskForm.description}
+                                       onChange={(e) => setExecutionTaskForm({ ...executionTaskForm, description: e.target.value })}
+                                       placeholder="Descreva como saberemos que esta tarefa está concluída..."
+                                       className="mt-2 h-28 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+
+                                 <button
+                                    onClick={handleSaveExecutionTask}
+                                    disabled={isSavingExecutionTask || !executionTaskForm.title.trim()}
+                                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-teal-700 disabled:opacity-50"
+                                 >
+                                    <Plus size={16} />
+                                    {isSavingExecutionTask ? 'Salvando...' : 'Adicionar tarefa'}
+                                 </button>
+                              </div>
+                           </div>
+
+                           <div className="space-y-6">
+                              <div className="rounded-[32px] border border-teal-100 bg-teal-50 p-6 dark:border-teal-900/50 dark:bg-teal-950/20">
+                                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                       <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Execução da obra</p>
+                                       <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Tarefas por etapa</h3>
+                                       <p className="mt-1 text-sm font-semibold text-gray-600 dark:text-gray-300">{taskCompleted} de {selectedProjectTasks.length} tarefas concluídas. {taskBlocked ? `${taskBlocked} bloqueada(s).` : 'Sem bloqueios registrados.'}</p>
+                                    </div>
+                                    <button
+                                       onClick={handleCreateDefaultExecutionTasks}
+                                       className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gray-950 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:opacity-90 dark:bg-white dark:text-gray-950"
+                                    >
+                                       <ClipboardCheck size={16} />
+                                       Gerar checklist
+                                    </button>
+                                 </div>
+                                 <div className="mt-5 h-3 overflow-hidden rounded-full bg-white dark:bg-gray-950">
+                                    <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${taskProgress}%` }} />
+                                 </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                 {selectedProjectTasks.length ? (
+                                    selectedProjectTasks.map(task => {
+                                       const isOverdue = task.status !== 'done' && task.dueDate && task.dueDate < new Date().toISOString().split('T')[0];
+                                       const statusLabel = task.status === 'todo'
+                                          ? 'A fazer'
+                                          : task.status === 'in_progress'
+                                             ? 'Em execução'
+                                             : task.status === 'done'
+                                                ? 'Concluída'
+                                                : 'Bloqueada';
+                                       return (
+                                          <div key={task.id} className={`rounded-3xl border p-5 transition ${
+                                             task.status === 'done'
+                                                ? 'border-emerald-100 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+                                                : task.status === 'blocked' || isOverdue
+                                                   ? 'border-rose-100 bg-rose-50 dark:border-rose-900/40 dark:bg-rose-950/20'
+                                                   : 'border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-900'
+                                          }`}>
+                                             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                                <div>
+                                                   <div className="flex flex-wrap gap-2">
+                                                      <span className="rounded-full bg-teal-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{task.phase || 'Geral'}</span>
+                                                      <span className="rounded-full bg-gray-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-gray-500 dark:bg-gray-800">{statusLabel}</span>
+                                                      <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
+                                                         task.priority === 'high'
+                                                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+                                                            : task.priority === 'medium'
+                                                               ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                                               : 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+                                                      }`}>{task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Média' : 'Baixa'}</span>
+                                                      {isOverdue && <span className="rounded-full bg-rose-600 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-white">Vencida</span>}
+                                                   </div>
+                                                   <h4 className="mt-3 font-black text-gray-900 dark:text-white">{task.title}</h4>
+                                                   {task.description && <p className="mt-2 text-sm font-semibold leading-6 text-gray-500 dark:text-gray-400">{task.description}</p>}
+                                                   <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                      {task.responsible ? `Responsável: ${task.responsible}` : 'Responsável não definido'}
+                                                      {task.dueDate ? ` · Prazo: ${new Date(`${task.dueDate}T00:00:00`).toLocaleDateString()}` : ''}
+                                                   </p>
+                                                </div>
+                                                <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
+                                                   {task.status !== 'done' && (
+                                                      <button
+                                                         onClick={() => handleUpdateExecutionTaskStatus(task, 'done')}
+                                                         className="rounded-xl bg-emerald-600 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white transition hover:bg-emerald-700"
+                                                      >
+                                                         Concluir
+                                                      </button>
+                                                   )}
+                                                   {task.status !== 'in_progress' && task.status !== 'done' && (
+                                                      <button
+                                                         onClick={() => handleUpdateExecutionTaskStatus(task, 'in_progress')}
+                                                         className="rounded-xl bg-teal-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-teal-700 transition hover:bg-teal-100 dark:bg-teal-900/20 dark:text-teal-300"
+                                                      >
+                                                         Iniciar
+                                                      </button>
+                                                   )}
+                                                   {task.status !== 'blocked' && task.status !== 'done' && (
+                                                      <button
+                                                         onClick={() => handleUpdateExecutionTaskStatus(task, 'blocked')}
+                                                         className="rounded-xl bg-rose-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-rose-700 transition hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-300"
+                                                      >
+                                                         Bloquear
+                                                      </button>
+                                                   )}
+                                                   {task.status === 'done' && (
+                                                      <button
+                                                         onClick={() => handleUpdateExecutionTaskStatus(task, 'todo')}
+                                                         className="rounded-xl bg-gray-100 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-gray-600 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
+                                                      >
+                                                         Reabrir
+                                                      </button>
+                                                   )}
+                                                </div>
+                                             </div>
+                                          </div>
+                                       );
+                                    })
+                                 ) : (
+                                    <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+                                       <ClipboardCheck size={34} className="mx-auto text-gray-300" />
+                                       <p className="mt-4 font-black text-gray-900 dark:text-white">Nenhuma tarefa criada</p>
+                                       <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Crie tarefas manualmente ou gere o checklist a partir do plano de execução.</p>
+                                    </div>
+                                 )}
+                              </div>
+                           </div>
                         </div>
                      )}
 
