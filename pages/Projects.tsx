@@ -139,6 +139,26 @@ const addDays = (date: string, days: number) => {
    return nextDate.toISOString().split('T')[0];
 };
 
+const sanitizeFileName = (fileName: string) => fileName
+   .normalize('NFD')
+   .replace(/[\u0300-\u036f]/g, '')
+   .replace(/[^a-zA-Z0-9._-]/g, '-')
+   .replace(/-+/g, '-')
+   .toLowerCase();
+
+const withTimeout = async <T,>(promise: PromiseLike<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+   const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+   });
+
+   try {
+      return await Promise.race([promise, timeoutPromise]);
+   } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+   }
+};
+
 // Componente Interno para o Form de Lote
 const BatchForm: React.FC<{ onSave: (items: any[], header: any) => void, onCancel: () => void }> = ({ onSave, onCancel }) => {
    const [header, setHeader] = useState({ fornecedor: '', data: new Date().toISOString().split('T')[0], status: 'pago' as StatusCusto });
@@ -193,6 +213,7 @@ const Projects: React.FC = () => {
    const [isCreatingPlan, setIsCreatingPlan] = useState(false);
    const [isSavingDailyReport, setIsSavingDailyReport] = useState(false);
    const [clientReportDays, setClientReportDays] = useState<'7' | '15' | '30' | 'all'>('7');
+   const [dailyPhotoFiles, setDailyPhotoFiles] = useState<File[]>([]);
    const [dailyReportForm, setDailyReportForm] = useState({
       reportDate: new Date().toISOString().split('T')[0],
       weather: 'nao_informado' as DailyReport['weather'],
@@ -461,16 +482,64 @@ const Projects: React.FC = () => {
          nextSteps: '',
          photosText: ''
       });
+      setDailyPhotoFiles([]);
+   };
+
+   const handleDailyPhotoSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = '';
+      if (!files.length) return;
+
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+      const validFiles = files.filter(file => allowedTypes.includes(file.type) && file.size <= 8 * 1024 * 1024);
+
+      if (validFiles.length !== files.length) {
+         setMessage({ text: 'Algumas imagens foram ignoradas. Use PNG, JPG ou WebP com até 8MB.', type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+      }
+
+      setDailyPhotoFiles(prev => [...prev, ...validFiles].slice(0, 8));
    };
 
    const handleSaveDailyReport = async () => {
       if (!selectedProject || !user?.id || !dailyReportForm.activities.trim()) return;
 
       setIsSavingDailyReport(true);
-      const photos = dailyReportForm.photosText
+      const linkedPhotos = dailyReportForm.photosText
          .split('\n')
          .map(item => item.trim())
          .filter(Boolean);
+      const uploadedPhotoPaths: string[] = [];
+
+      try {
+         for (const file of dailyPhotoFiles) {
+            const filePath = `${user.id}/${selectedProject.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
+            const { error: uploadError } = await withTimeout(
+               supabase.storage.from('project-daily-photos').upload(filePath, file, {
+                  cacheControl: '3600',
+                  upsert: false
+               }),
+               45000,
+               'Tempo esgotado ao enviar uma foto. Verifique sua conexão e tente novamente.'
+            );
+
+            if (uploadError) {
+               throw new Error(uploadError.message || 'Storage recusou o envio da foto.');
+            }
+
+            uploadedPhotoPaths.push(filePath);
+         }
+      } catch (error: any) {
+         setIsSavingDailyReport(false);
+         setMessage({
+            text: `Erro ao enviar fotos: ${error?.message || 'verifique o bucket project-daily-photos no Supabase.'}`,
+            type: 'error'
+         });
+         setTimeout(() => setMessage(null), 7000);
+         return;
+      }
+
+      const photos = [...linkedPhotos, ...uploadedPhotoPaths];
 
       const { error } = await supabase.from('project_daily_reports').insert([{
          user_id: user.id,
@@ -487,7 +556,10 @@ const Projects: React.FC = () => {
       }]);
 
       if (error) {
-         setMessage({ text: 'Erro ao salvar diário. Aplique a migration 00007_project_daily_reports.sql no Supabase.', type: 'error' });
+         if (uploadedPhotoPaths.length) {
+            await supabase.storage.from('project-daily-photos').remove(uploadedPhotoPaths);
+         }
+         setMessage({ text: 'Erro ao salvar diário. Aplique as migrations 00007 e 00008 no Supabase.', type: 'error' });
          setTimeout(() => setMessage(null), 6500);
       } else {
          await fetchDailyReports(selectedProject.id);
@@ -520,7 +592,48 @@ const Projects: React.FC = () => {
       setTimeout(() => setMessage(null), 3000);
    };
 
-   const buildClientProgressReport = () => {
+   const isExternalPhotoUrl = (photo: string) => /^https?:\/\//i.test(photo);
+
+   const getDailyPhotoUrl = async (photo: string) => {
+      if (isExternalPhotoUrl(photo)) return photo;
+
+      const { data, error } = await supabase.storage
+         .from('project-daily-photos')
+         .createSignedUrl(photo, 60 * 60 * 24 * 7);
+
+      if (error || !data?.signedUrl) {
+         throw new Error(error?.message || 'Não foi possível gerar link temporário da foto.');
+      }
+
+      return data.signedUrl;
+   };
+
+   const handleOpenDailyPhoto = async (photo: string) => {
+      try {
+         const url = await getDailyPhotoUrl(photo);
+         window.open(url, '_blank');
+      } catch (error: any) {
+         setMessage({ text: 'Erro ao abrir foto: ' + (error?.message || 'link indisponível'), type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+      }
+   };
+
+   const getClientReportPhotoLinks = async () => {
+      const photos = clientReportWindowReports.flatMap(report => report.photos);
+      const links: string[] = [];
+
+      for (const photo of photos) {
+         try {
+            links.push(await getDailyPhotoUrl(photo));
+         } catch (error) {
+            console.warn('Foto ignorada no relatório do cliente:', photo);
+         }
+      }
+
+      return links;
+   };
+
+   const buildClientProgressReport = (photoLinks: string[] = []) => {
       if (!selectedProject) return '';
 
       const reports = clientReportWindowReports;
@@ -557,12 +670,14 @@ const Projects: React.FC = () => {
          'Próximos passos:',
          nextSteps || 'Os próximos passos serão atualizados no próximo acompanhamento.',
          '',
-         photosCount ? `Registros fotográficos anexados/linkados: ${photosCount}` : ''
+         photosCount ? `Registros fotográficos anexados/linkados: ${photosCount}` : '',
+         photoLinks.length ? `Links temporários das fotos:\n${photoLinks.map((link, index) => `${index + 1}. ${link}`).join('\n')}` : ''
       ].filter(line => line !== '').join('\n');
    };
 
-   const handleCopyClientProgressReport = () => {
-      const reportText = buildClientProgressReport();
+   const handleCopyClientProgressReport = async () => {
+      const photoLinks = await getClientReportPhotoLinks();
+      const reportText = buildClientProgressReport(photoLinks);
       if (!reportText) return;
 
       navigator.clipboard.writeText(reportText);
@@ -571,8 +686,9 @@ const Projects: React.FC = () => {
       setTimeout(() => setMessage(null), 3500);
    };
 
-   const handleSendClientProgressWhatsapp = () => {
-      const reportText = buildClientProgressReport();
+   const handleSendClientProgressWhatsapp = async () => {
+      const photoLinks = await getClientReportPhotoLinks();
+      const reportText = buildClientProgressReport(photoLinks);
       if (!reportText || !selectedProject) return;
 
       window.open(createWhatsappLink('11999999999', reportText), '_blank');
@@ -595,8 +711,9 @@ const Projects: React.FC = () => {
       }
    };
 
-   const handlePrintClientProgressReport = () => {
-      const reportText = buildClientProgressReport();
+   const handlePrintClientProgressReport = async () => {
+      const photoLinks = await getClientReportPhotoLinks();
+      const reportText = buildClientProgressReport(photoLinks);
       if (!reportText || !selectedProject) return;
 
       const printable = reportText
@@ -1246,12 +1363,34 @@ const Projects: React.FC = () => {
                                  </div>
 
                                  <div>
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Fotos / links</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Fotos da obra</label>
+                                    <label className="mt-2 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white px-4 py-5 text-center transition hover:border-teal-500 hover:bg-teal-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-teal-700 dark:hover:bg-teal-900/20">
+                                       <Camera size={24} className="text-teal-600" />
+                                       <span className="mt-2 text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">Anexar fotos</span>
+                                       <span className="mt-1 text-[11px] font-bold text-gray-400">PNG, JPG ou WebP até 8MB cada</span>
+                                       <input type="file" multiple accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleDailyPhotoSelection} />
+                                    </label>
+                                    {dailyPhotoFiles.length > 0 && (
+                                       <div className="mt-3 flex flex-wrap gap-2">
+                                          {dailyPhotoFiles.map((file, index) => (
+                                             <span key={`${file.name}-${index}`} className="inline-flex items-center gap-2 rounded-xl bg-teal-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                                                {file.name}
+                                                <button
+                                                   type="button"
+                                                   onClick={() => setDailyPhotoFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index))}
+                                                   className="text-teal-500 hover:text-rose-500"
+                                                >
+                                                   <X size={12} />
+                                                </button>
+                                             </span>
+                                          ))}
+                                       </div>
+                                    )}
                                     <textarea
                                        value={dailyReportForm.photosText}
                                        onChange={(e) => setDailyReportForm({ ...dailyReportForm, photosText: e.target.value })}
-                                       placeholder="Cole um link por linha. Upload direto fica para a próxima etapa."
-                                       className="mt-2 h-20 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       placeholder="Opcional: cole links externos, um por linha."
+                                       className="mt-3 h-16 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
                                     />
                                  </div>
 
@@ -1371,9 +1510,9 @@ const Projects: React.FC = () => {
                                                 {report.photos.length > 0 && (
                                                    <div className="mt-4 flex flex-wrap gap-2">
                                                       {report.photos.map((photo, index) => (
-                                                         <a key={`${report.id}-${photo}`} href={photo} target="_blank" rel="noreferrer" className="rounded-xl bg-gray-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-600 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300">
+                                                         <button key={`${report.id}-${photo}`} onClick={() => handleOpenDailyPhoto(photo)} className="rounded-xl bg-gray-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-600 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300">
                                                             Foto {index + 1}
-                                                         </a>
+                                                         </button>
                                                       ))}
                                                    </div>
                                                 )}
