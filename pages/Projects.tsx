@@ -675,6 +675,26 @@ const Projects: React.FC = () => {
       return links;
    };
 
+   const getPrintableReportPhotos = async () => {
+      const photoItems: { url: string; date: string; label: string }[] = [];
+
+      for (const report of clientReportWindowReports) {
+         for (const [index, photo] of report.photos.entries()) {
+            try {
+               photoItems.push({
+                  url: await getDailyPhotoUrl(photo),
+                  date: report.reportDate,
+                  label: `Foto ${index + 1} - ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}`
+               });
+            } catch (error) {
+               console.warn('Foto ignorada na impressão:', photo);
+            }
+         }
+      }
+
+      return photoItems;
+   };
+
    const buildClientProgressReport = (photoLinks: string[] = []) => {
       if (!selectedProject) return '';
 
@@ -754,16 +774,8 @@ const Projects: React.FC = () => {
    };
 
    const handlePrintClientProgressReport = async () => {
-      const photoLinks = await getClientReportPhotoLinks();
-      const reportText = buildClientProgressReport(photoLinks);
-      if (!reportText || !selectedProject) return;
+      if (!selectedProject) return;
 
-      const printable = reportText
-         .split('\n')
-         .map(line => line.trim()
-            ? `<p>${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
-            : '<br />')
-         .join('');
       const printWindow = window.open('', '_blank', 'width=900,height=720');
       if (!printWindow) {
          setMessage({ text: 'Não foi possível abrir a prévia. Verifique o bloqueador de pop-up.', type: 'error' });
@@ -774,23 +786,135 @@ const Projects: React.FC = () => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Relatório - ${selectedProject.name}</title>
+            <title>Preparando relatório...</title>
             <style>
-              body { font-family: Arial, sans-serif; color: #111827; margin: 40px; line-height: 1.5; }
-              .header { border-bottom: 3px solid #0f766e; padding-bottom: 18px; margin-bottom: 28px; }
-              .brand { color: #0f766e; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
-              h1 { font-size: 28px; margin: 8px 0 0; }
-              p { margin: 0 0 9px; white-space: pre-wrap; }
-              @media print { body { margin: 24px; } }
+              body { align-items: center; background: #020617; color: #5eead4; display: flex; font-family: Arial, sans-serif; font-weight: 800; gap: 12px; height: 100vh; justify-content: center; margin: 0; }
+              span { border: 3px solid rgba(94, 234, 212, .25); border-top-color: #5eead4; border-radius: 999px; height: 28px; width: 28px; animation: spin .8s linear infinite; }
+              @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+          </head>
+          <body><span></span>Preparando relatório com fotos...</body>
+        </html>
+      `);
+      printWindow.document.close();
+
+      const escapeHtml = (value: string) => value
+         .replace(/&/g, '&amp;')
+         .replace(/</g, '&lt;')
+         .replace(/>/g, '&gt;')
+         .replace(/"/g, '&quot;')
+         .replace(/'/g, '&#039;');
+      const reports = clientReportWindowReports;
+      const photos = await getPrintableReportPhotos();
+      const latestReportDate = reports[0]?.reportDate
+         ? new Date(`${reports[0].reportDate}T00:00:00`).toLocaleDateString()
+         : 'sem registros no período';
+      const blockers = reports.filter(report => report.blockers);
+      const nextSteps = reports.filter(report => report.nextSteps);
+      const reportCards = reports.map(report => `
+        <article class="entry">
+          <div class="entry-meta">
+            <span>${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}</span>
+            <span>${escapeHtml(report.status.replace('_', ' '))}</span>
+            <span>${escapeHtml(report.weather.replace('_', ' '))}</span>
+          </div>
+          ${report.workforce ? `<p class="eyebrow">Equipe / responsáveis</p><p>${escapeHtml(report.workforce)}</p>` : ''}
+          <p class="eyebrow">Atividades realizadas</p>
+          <p>${escapeHtml(report.activities)}</p>
+          ${report.blockers ? `<div class="alert"><p class="eyebrow">Pendências / bloqueios</p><p>${escapeHtml(report.blockers)}</p></div>` : ''}
+          ${report.nextSteps ? `<div class="next"><p class="eyebrow">Próximos passos</p><p>${escapeHtml(report.nextSteps)}</p></div>` : ''}
+        </article>
+      `).join('');
+      const photoGrid = photos.map(photo => `
+        <figure>
+          <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(photo.label)}" />
+          <figcaption>${escapeHtml(photo.label)}</figcaption>
+        </figure>
+      `).join('');
+
+      printWindow.document.open();
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Relatório - ${escapeHtml(selectedProject.name)}</title>
+            <style>
+              * { box-sizing: border-box; }
+              body { font-family: Arial, sans-serif; color: #111827; margin: 0; background: #f8fafc; line-height: 1.5; }
+              main { max-width: 960px; margin: 0 auto; background: #fff; min-height: 100vh; }
+              .hero { background: #0f766e; color: #fff; padding: 44px 48px; }
+              .brand { font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; opacity: .85; }
+              h1 { font-size: 34px; margin: 10px 0 8px; line-height: 1.1; }
+              h2 { font-size: 18px; margin: 0 0 18px; }
+              p { margin: 0 0 10px; white-space: pre-wrap; }
+              .muted { color: #64748b; font-weight: 700; }
+              .section { padding: 32px 48px; border-bottom: 1px solid #e5e7eb; }
+              .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+              .metric { border: 1px solid #e5e7eb; border-radius: 18px; padding: 16px; background: #f8fafc; }
+              .metric span { display: block; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+              .metric strong { display: block; margin-top: 8px; font-size: 22px; }
+              .entry { border: 1px solid #e5e7eb; border-radius: 22px; padding: 20px; margin-bottom: 16px; break-inside: avoid; }
+              .entry-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+              .entry-meta span { border-radius: 999px; background: #ccfbf1; color: #0f766e; padding: 6px 10px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+              .eyebrow { color: #0f766e; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-top: 12px; }
+              .alert, .next { border-radius: 18px; padding: 14px; margin-top: 14px; }
+              .alert { background: #fff1f2; color: #9f1239; }
+              .next { background: #ecfdf5; color: #047857; }
+              .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+              figure { margin: 0; border: 1px solid #e5e7eb; border-radius: 18px; overflow: hidden; break-inside: avoid; background: #f8fafc; }
+              img { display: block; width: 100%; height: 260px; object-fit: cover; }
+              figcaption { padding: 10px 12px; color: #475569; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+              @media print {
+                body { background: #fff; }
+                main { max-width: none; }
+                .hero { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+                .section { padding: 24px 32px; }
+                img { height: 220px; }
+              }
             </style>
           </head>
           <body>
-            <div class="header">
-              <div class="brand">PrecificaPro</div>
-              <h1>Relatório de Andamento</h1>
-            </div>
-            ${printable}
-            <script>window.onload = () => window.print();</script>
+            <main>
+              <header class="hero">
+                <div class="brand">PrecificaPro</div>
+                <h1>Relatório de Andamento</h1>
+                <p>${escapeHtml(selectedProject.name)}</p>
+                <p>Cliente: ${escapeHtml(selectedProject.clientName)}</p>
+              </header>
+              <section class="section">
+                <div class="summary">
+                  <div class="metric"><span>Período</span><strong>${escapeHtml(clientReportPeriodLabel)}</strong></div>
+                  <div class="metric"><span>Última atualização</span><strong>${escapeHtml(latestReportDate)}</strong></div>
+                  <div class="metric"><span>Avanço físico</span><strong>${scheduleProgress}%</strong></div>
+                  <div class="metric"><span>Registros</span><strong>${reports.length}</strong></div>
+                </div>
+                ${nextScheduleEvent ? `<p class="muted" style="margin-top:18px;">Próximo marco: ${escapeHtml(nextScheduleEvent.title)}</p>` : ''}
+              </section>
+              <section class="section">
+                <h2>Resumo por data</h2>
+                ${reportCards || '<p class="muted">Ainda não há registros no período selecionado.</p>'}
+              </section>
+              <section class="section">
+                <h2>Pendências e próximos passos</h2>
+                <p class="eyebrow">Pontos de atenção</p>
+                ${blockers.length ? blockers.map(report => `<p>- ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}: ${escapeHtml(report.blockers || '')}</p>`).join('') : '<p>Nenhuma pendência relevante registrada no período.</p>'}
+                <p class="eyebrow">Próximos passos</p>
+                ${nextSteps.length ? nextSteps.map(report => `<p>- ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}: ${escapeHtml(report.nextSteps || '')}</p>`).join('') : '<p>Os próximos passos serão atualizados no próximo acompanhamento.</p>'}
+              </section>
+              ${photos.length ? `<section class="section"><h2>Registro fotográfico</h2><div class="gallery">${photoGrid}</div></section>` : ''}
+            </main>
+            <script>
+              window.onload = () => {
+                const images = Array.from(document.images);
+                if (!images.length) {
+                  window.print();
+                  return;
+                }
+                Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
+                  img.onload = resolve;
+                  img.onerror = resolve;
+                }))).then(() => window.print());
+              };
+            </script>
           </body>
         </html>
       `);
