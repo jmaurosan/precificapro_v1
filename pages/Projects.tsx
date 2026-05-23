@@ -90,6 +90,8 @@ interface DailyReport {
    blockers?: string;
    nextSteps?: string;
    photos: string[];
+   taskIds: string[];
+   completedTaskIds: string[];
    sharedWithClient: boolean;
    createdAt: string;
 }
@@ -254,6 +256,8 @@ const Projects: React.FC = () => {
       activities: '',
       blockers: '',
       nextSteps: '',
+      taskIds: [] as string[],
+      completedTaskIds: [] as string[],
       photosText: ''
    });
 
@@ -322,6 +326,7 @@ const Projects: React.FC = () => {
       ? Math.round((taskCompleted / selectedProjectTasks.length) * 100)
       : 0;
    const overdueTasks = selectedProjectTasks.filter(task => task.status !== 'done' && task.dueDate && task.dueDate < new Date().toISOString().split('T')[0]);
+   const openExecutionTasks = selectedProjectTasks.filter(task => task.status !== 'done');
    const selectedProjectReports = useMemo(() => {
       if (!selectedProject) return [];
       return dailyReports
@@ -341,6 +346,33 @@ const Projects: React.FC = () => {
    const clientReportPeriodLabel = clientReportDays === 'all'
       ? 'todo o histórico'
       : `últimos ${clientReportDays} dias`;
+   const getTaskById = (taskId: string) => executionTasks.find(task => task.id === taskId);
+   const toggleDailyReportTask = (taskId: string) => {
+      setDailyReportForm(prev => {
+         const isSelected = prev.taskIds.includes(taskId);
+         return {
+            ...prev,
+            taskIds: isSelected
+               ? prev.taskIds.filter(id => id !== taskId)
+               : [...prev.taskIds, taskId],
+            completedTaskIds: isSelected
+               ? prev.completedTaskIds.filter(id => id !== taskId)
+               : prev.completedTaskIds
+         };
+      });
+   };
+   const toggleDailyReportCompletedTask = (taskId: string) => {
+      setDailyReportForm(prev => {
+         const taskIds = prev.taskIds.includes(taskId) ? prev.taskIds : [...prev.taskIds, taskId];
+         return {
+            ...prev,
+            taskIds,
+            completedTaskIds: prev.completedTaskIds.includes(taskId)
+               ? prev.completedTaskIds.filter(id => id !== taskId)
+               : [...prev.completedTaskIds, taskId]
+         };
+      });
+   };
 
    // Fetch data from Supabase
    useEffect(() => {
@@ -688,6 +720,8 @@ const Projects: React.FC = () => {
             blockers: report.blockers || '',
             nextSteps: report.next_steps || '',
             photos: Array.isArray(report.photos) ? report.photos : [],
+            taskIds: Array.isArray(report.task_ids) ? report.task_ids : [],
+            completedTaskIds: Array.isArray(report.completed_task_ids) ? report.completed_task_ids : [],
             sharedWithClient: Boolean(report.shared_with_client),
             createdAt: report.created_at
          }))
@@ -703,6 +737,8 @@ const Projects: React.FC = () => {
          activities: '',
          blockers: '',
          nextSteps: '',
+         taskIds: [],
+         completedTaskIds: [],
          photosText: ''
       });
       dailyPhotoFiles.forEach(photo => URL.revokeObjectURL(photo.url));
@@ -782,6 +818,8 @@ const Projects: React.FC = () => {
          blockers: dailyReportForm.blockers || null,
          next_steps: dailyReportForm.nextSteps || null,
          photos,
+         task_ids: dailyReportForm.taskIds,
+         completed_task_ids: dailyReportForm.completedTaskIds,
          shared_with_client: false
       }]);
 
@@ -792,7 +830,21 @@ const Projects: React.FC = () => {
          setMessage({ text: 'Erro ao salvar diário. Aplique as migrations 00007 e 00008 no Supabase.', type: 'error' });
          setTimeout(() => setMessage(null), 6500);
       } else {
+         if (dailyReportForm.completedTaskIds.length) {
+            const { error: taskError } = await supabase
+               .from('project_execution_tasks')
+               .update({
+                  status: 'done',
+                  completed_at: new Date().toISOString()
+               })
+               .in('id', dailyReportForm.completedTaskIds);
+
+            if (taskError) {
+               console.warn('Não foi possível concluir tarefas vinculadas ao diário:', taskError.message);
+            }
+         }
          await fetchDailyReports(selectedProject.id);
+         await fetchExecutionTasks(selectedProject.id);
          resetDailyReportForm();
          setMessage({ text: 'Diário de obra registrado com sucesso.', type: 'success' });
          setTimeout(() => setMessage(null), 3500);
@@ -903,6 +955,23 @@ const Projects: React.FC = () => {
          .filter(report => report.nextSteps)
          .map(report => `- ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}: ${report.nextSteps}`)
          .join('\n');
+      const taskLines = reports
+         .filter(report => report.taskIds.length)
+         .map(report => {
+            const workedTasks = report.taskIds
+               .map(taskId => {
+                  const task = getTaskById(taskId);
+                  if (!task) return null;
+                  return `${task.title}${report.completedTaskIds.includes(taskId) ? ' (concluída)' : ''}`;
+               })
+               .filter(Boolean)
+               .join('; ');
+            return workedTasks
+               ? `- ${new Date(`${report.reportDate}T00:00:00`).toLocaleDateString()}: ${workedTasks}`
+               : '';
+         })
+         .filter(Boolean)
+         .join('\n');
       const photosCount = reports.reduce((total, report) => total + report.photos.length, 0);
 
       return [
@@ -921,6 +990,9 @@ const Projects: React.FC = () => {
          '',
          'Próximos passos:',
          nextSteps || 'Os próximos passos serão atualizados no próximo acompanhamento.',
+         '',
+         'Tarefas vinculadas:',
+         taskLines || 'Nenhuma tarefa vinculada aos diários do período.',
          '',
          photosCount ? `Registros fotográficos anexados/linkados: ${photosCount}` : '',
          photoLinks.length ? `Links temporários das fotos:\n${photoLinks.map((link, index) => `${index + 1}. ${link}`).join('\n')}` : ''
@@ -1008,6 +1080,11 @@ const Projects: React.FC = () => {
             <span>${escapeHtml(report.status.replace('_', ' '))}</span>
             <span>${escapeHtml(report.weather.replace('_', ' '))}</span>
           </div>
+          ${report.taskIds.length ? `<div class="tasks"><p class="eyebrow">Tarefas trabalhadas</p>${report.taskIds.map(taskId => {
+            const task = getTaskById(taskId);
+            if (!task) return '';
+            return `<p>${escapeHtml(task.title)}${report.completedTaskIds.includes(taskId) ? ' <strong>(concluída)</strong>' : ''}</p>`;
+         }).join('')}</div>` : ''}
           ${report.workforce ? `<p class="eyebrow">Equipe / responsáveis</p><p>${escapeHtml(report.workforce)}</p>` : ''}
           <p class="eyebrow">Atividades realizadas</p>
           <p>${escapeHtml(report.activities)}</p>
@@ -1049,6 +1126,8 @@ const Projects: React.FC = () => {
               .alert, .next { border-radius: 18px; padding: 14px; margin-top: 14px; }
               .alert { background: #fff1f2; color: #9f1239; }
               .next { background: #ecfdf5; color: #047857; }
+              .tasks { border-radius: 18px; padding: 14px; margin-bottom: 14px; background: #f0fdfa; color: #0f766e; }
+              .tasks p:not(.eyebrow) { margin-bottom: 6px; }
               .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
               figure { margin: 0; border: 1px solid #e5e7eb; border-radius: 18px; overflow: hidden; break-inside: avoid; background: #f8fafc; }
               img { display: block; width: 100%; height: 260px; object-fit: cover; }
@@ -1904,6 +1983,62 @@ const Projects: React.FC = () => {
                                     />
                                  </div>
 
+                                 <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4 dark:border-teal-900/50 dark:bg-teal-950/20">
+                                    <div className="flex items-start justify-between gap-3">
+                                       <div>
+                                          <label className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Tarefas trabalhadas</label>
+                                          <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">Vincule o diário às tarefas executadas hoje.</p>
+                                       </div>
+                                       <button
+                                          type="button"
+                                          onClick={() => setActiveTab('tasks')}
+                                          className="shrink-0 rounded-xl bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-teal-700 dark:bg-gray-950 dark:text-teal-300"
+                                       >
+                                          Ver tarefas
+                                       </button>
+                                    </div>
+                                    <div className="mt-4 max-h-56 space-y-2 overflow-y-auto pr-1">
+                                       {openExecutionTasks.length ? (
+                                          openExecutionTasks.map(task => {
+                                             const selected = dailyReportForm.taskIds.includes(task.id);
+                                             const completed = dailyReportForm.completedTaskIds.includes(task.id);
+                                             return (
+                                                <div key={task.id} className={`rounded-2xl border p-3 ${selected ? 'border-teal-300 bg-white dark:border-teal-800 dark:bg-gray-900' : 'border-transparent bg-white/60 dark:bg-gray-950/60'}`}>
+                                                   <label className="flex cursor-pointer items-start gap-3">
+                                                      <input
+                                                         type="checkbox"
+                                                         checked={selected}
+                                                         onChange={() => toggleDailyReportTask(task.id)}
+                                                         className="mt-1 h-4 w-4 accent-teal-600"
+                                                      />
+                                                      <span className="min-w-0 flex-1">
+                                                         <span className="block text-sm font-black text-gray-900 dark:text-white">{task.title}</span>
+                                                         <span className="mt-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">{task.phase || 'Geral'}{task.responsible ? ` · ${task.responsible}` : ''}</span>
+                                                      </span>
+                                                   </label>
+                                                   {selected && (
+                                                      <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                                                         <input
+                                                            type="checkbox"
+                                                            checked={completed}
+                                                            onChange={() => toggleDailyReportCompletedTask(task.id)}
+                                                            className="h-4 w-4 accent-emerald-600"
+                                                         />
+                                                         Marcar como concluída neste diário
+                                                      </label>
+                                                   )}
+                                                </div>
+                                             );
+                                          })
+                                       ) : (
+                                          <div className="rounded-2xl border border-dashed border-teal-200 bg-white p-4 text-center dark:border-teal-900 dark:bg-gray-950">
+                                             <p className="text-sm font-black text-gray-900 dark:text-white">Nenhuma tarefa aberta</p>
+                                             <p className="mt-1 text-xs font-bold text-gray-500">Crie ou gere tarefas na aba Tarefas para vinculá-las ao diário.</p>
+                                          </div>
+                                       )}
+                                    </div>
+                                 </div>
+
                                  <div>
                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Pendências / bloqueios</label>
                                     <textarea
@@ -2062,6 +2197,24 @@ const Projects: React.FC = () => {
                                                    )}
                                                 </div>
                                                 {report.workforce && <p className="mt-4 text-xs font-black uppercase tracking-widest text-gray-400">Equipe: {report.workforce}</p>}
+                                                {report.taskIds.length > 0 && (
+                                                   <div className="mt-4 rounded-2xl bg-teal-50 p-4 text-teal-800 dark:bg-teal-900/20 dark:text-teal-200">
+                                                      <p className="text-[10px] font-black uppercase tracking-widest">Tarefas vinculadas</p>
+                                                      <div className="mt-2 space-y-2">
+                                                         {report.taskIds.map(taskId => {
+                                                            const task = getTaskById(taskId);
+                                                            if (!task) return null;
+                                                            const completedInReport = report.completedTaskIds.includes(taskId);
+                                                            return (
+                                                               <div key={`${report.id}-${taskId}`} className="flex items-start gap-2 text-sm font-bold">
+                                                                  {completedInReport ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-600" /> : <ClipboardCheck size={16} className="mt-0.5 shrink-0 text-teal-600" />}
+                                                                  <span>{task.title} <span className="text-xs uppercase tracking-widest opacity-70">{completedInReport ? 'concluída no diário' : 'trabalhada'}</span></span>
+                                                               </div>
+                                                            );
+                                                         })}
+                                                      </div>
+                                                   </div>
+                                                )}
                                                 <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6 text-gray-700 dark:text-gray-200">{report.activities}</p>
                                                 {report.blockers && (
                                                    <div className="mt-4 rounded-2xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">
