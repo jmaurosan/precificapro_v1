@@ -143,6 +143,63 @@ interface ProjectDocument {
    validityStatus: 'valido' | 'proximo_vencimento' | 'vencido';
 }
 
+interface ProjectTeamMember {
+   id: string;
+   projectId: string;
+   name: string;
+   role: string;
+   phone?: string;
+   email?: string;
+   notes?: string;
+   isPrimary: boolean;
+   createdAt: string;
+}
+
+interface ProjectMessage {
+   id: string;
+   projectId: string;
+   teamMemberId?: string;
+   recipientName: string;
+   recipientPhone?: string;
+   channel: 'whatsapp';
+   template: string;
+   message: string;
+   sentAt: string;
+}
+
+const MESSAGE_TEMPLATES = [
+   {
+      value: 'livre',
+      label: 'Mensagem livre',
+      text: 'Olá, tudo bem? Segue atualização sobre a obra.'
+   },
+   {
+      value: 'visita_agendada',
+      label: 'Visita agendada',
+      text: 'Olá, temos uma visita/atividade agendada na obra. Por favor confirme disponibilidade e acesso ao local.'
+   },
+   {
+      value: 'pendencia_material',
+      label: 'Pendência de material',
+      text: 'Olá, precisamos de atenção para uma pendência de material na obra. Por favor verifique e nos retorne.'
+   },
+   {
+      value: 'atraso_etapa',
+      label: 'Atraso de etapa',
+      text: 'Olá, identificamos risco de atraso em uma etapa da obra. Precisamos alinhar as ações para normalizar o cronograma.'
+   },
+   {
+      value: 'liberacao_etapa',
+      label: 'Liberação de etapa',
+      text: 'Olá, a etapa foi liberada para continuidade. Por favor siga com a próxima atividade conforme combinado.'
+   },
+   {
+      value: 'documento_pendente',
+      label: 'Documento pendente',
+      text: 'Olá, existe um documento pendente relacionado à obra. Por favor providencie ou confirme o envio.'
+   }
+];
+
 const PROJECT_DOCUMENT_CATEGORIES: { value: ProjectDocumentCategory; label: string; description: string }[] = [
    { value: 'contratos', label: 'Contrato', description: 'Contrato, aditivo ou termo assinado.' },
    { value: 'art_rrt', label: 'ART / RRT', description: 'Responsabilidade técnica e registros profissionais.' },
@@ -268,15 +325,19 @@ const Projects: React.FC = () => {
    const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
    const [executionTasks, setExecutionTasks] = useState<ExecutionTask[]>([]);
    const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
+   const [teamMembers, setTeamMembers] = useState<ProjectTeamMember[]>([]);
+   const [projectMessages, setProjectMessages] = useState<ProjectMessage[]>([]);
 
    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'tasks' | 'diary' | 'documents' | 'finance' | 'quality'>('overview');
+   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'tasks' | 'diary' | 'documents' | 'communication' | 'finance' | 'quality'>('overview');
    const [showBatchModal, setShowBatchModal] = useState(false);
    const [showFiscalModal, setShowFiscalModal] = useState(false);
    const [isCreatingPlan, setIsCreatingPlan] = useState(false);
    const [isSavingDailyReport, setIsSavingDailyReport] = useState(false);
    const [isSavingExecutionTask, setIsSavingExecutionTask] = useState(false);
    const [isSavingDocument, setIsSavingDocument] = useState(false);
+   const [isSavingTeamMember, setIsSavingTeamMember] = useState(false);
+   const [isSendingProjectMessage, setIsSendingProjectMessage] = useState(false);
    const [clientReportDays, setClientReportDays] = useState<'7' | '15' | '30' | 'all'>('7');
    const [dailyPhotoFiles, setDailyPhotoFiles] = useState<DailyPhotoPreview[]>([]);
    const [dailyPhotoUrls, setDailyPhotoUrls] = useState<Record<string, string>>({});
@@ -310,6 +371,18 @@ const Projects: React.FC = () => {
    const [responsibleForm, setResponsibleForm] = useState({
       name: '',
       phone: ''
+   });
+   const [teamMemberForm, setTeamMemberForm] = useState({
+      name: '',
+      role: '',
+      phone: '',
+      email: '',
+      notes: ''
+   });
+   const [messageForm, setMessageForm] = useState({
+      memberId: '',
+      template: 'livre',
+      message: MESSAGE_TEMPLATES[0].text
    });
 
    // Estados para Módulo de Qualidade
@@ -390,6 +463,18 @@ const Projects: React.FC = () => {
    }));
    const expiredDocuments = selectedProjectDocuments.filter(document => document.validityStatus === 'vencido').length;
    const expiringDocuments = selectedProjectDocuments.filter(document => document.validityStatus === 'proximo_vencimento').length;
+   const selectedProjectTeam = useMemo(() => {
+      if (!selectedProject) return [];
+      return teamMembers
+         .filter(member => member.projectId === selectedProject.id)
+         .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name));
+   }, [selectedProject, teamMembers]);
+   const selectedProjectMessages = useMemo(() => {
+      if (!selectedProject) return [];
+      return projectMessages
+         .filter(message => message.projectId === selectedProject.id)
+         .sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+   }, [selectedProject, projectMessages]);
    const selectedProjectReports = useMemo(() => {
       if (!selectedProject) return [];
       return dailyReports
@@ -451,6 +536,8 @@ const Projects: React.FC = () => {
          fetchDailyReports(selectedProject.id);
          fetchExecutionTasks(selectedProject.id);
          fetchProjectDocuments(selectedProject.id);
+         fetchProjectTeam(selectedProject.id);
+         fetchProjectMessages(selectedProject.id);
          setResponsibleForm({
             name: selectedProject.responsibleName || '',
             phone: selectedProject.responsiblePhone || ''
@@ -660,6 +747,167 @@ const Projects: React.FC = () => {
       }
 
       window.open(createWhatsappLink(phone, message), '_blank');
+   };
+
+   const fetchProjectTeam = async (projectId: string) => {
+      const { data, error } = await supabase
+         .from('project_team_members')
+         .select('*')
+         .eq('project_id', projectId)
+         .order('is_primary', { ascending: false })
+         .order('name', { ascending: true });
+
+      if (error) {
+         console.warn('Equipe da obra indisponível:', error.message);
+         return;
+      }
+
+      setTeamMembers(prev => [
+         ...prev.filter(member => member.projectId !== projectId),
+         ...(data || []).map((member: any) => ({
+            id: member.id,
+            projectId: member.project_id,
+            name: member.name,
+            role: member.role,
+            phone: member.phone || '',
+            email: member.email || '',
+            notes: member.notes || '',
+            isPrimary: Boolean(member.is_primary),
+            createdAt: member.created_at
+         }))
+      ]);
+   };
+
+   const fetchProjectMessages = async (projectId: string) => {
+      const { data, error } = await supabase
+         .from('project_messages')
+         .select('*')
+         .eq('project_id', projectId)
+         .order('sent_at', { ascending: false });
+
+      if (error) {
+         console.warn('Histórico de mensagens indisponível:', error.message);
+         return;
+      }
+
+      setProjectMessages(prev => [
+         ...prev.filter(message => message.projectId !== projectId),
+         ...(data || []).map((message: any) => ({
+            id: message.id,
+            projectId: message.project_id,
+            teamMemberId: message.team_member_id || '',
+            recipientName: message.recipient_name,
+            recipientPhone: message.recipient_phone || '',
+            channel: message.channel,
+            template: message.template,
+            message: message.message,
+            sentAt: message.sent_at
+         }))
+      ]);
+   };
+
+   const resetTeamMemberForm = () => {
+      setTeamMemberForm({ name: '', role: '', phone: '', email: '', notes: '' });
+   };
+
+   const handleSaveTeamMember = async () => {
+      if (!selectedProject || !user?.id || !teamMemberForm.name.trim()) return;
+
+      setIsSavingTeamMember(true);
+      const { error } = await supabase.from('project_team_members').insert([{
+         user_id: user.id,
+         project_id: selectedProject.id,
+         name: teamMemberForm.name.trim(),
+         role: teamMemberForm.role.trim() || 'Equipe',
+         phone: teamMemberForm.phone.trim() || null,
+         email: teamMemberForm.email.trim() || null,
+         notes: teamMemberForm.notes.trim() || null,
+         is_primary: false
+      }]);
+
+      if (error) {
+         setMessage({ text: 'Erro ao salvar contato. Aplique a migration 00013 no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+      } else {
+         await fetchProjectTeam(selectedProject.id);
+         resetTeamMemberForm();
+         setMessage({ text: 'Contato adicionado à equipe da obra.', type: 'success' });
+         setTimeout(() => setMessage(null), 3000);
+      }
+
+      setIsSavingTeamMember(false);
+   };
+
+   const handleRemoveTeamMember = async (member: ProjectTeamMember) => {
+      if (!selectedProject) return;
+
+      const { error } = await supabase.from('project_team_members').delete().eq('id', member.id);
+      if (error) {
+         setMessage({ text: 'Erro ao remover contato: ' + error.message, type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      await fetchProjectTeam(selectedProject.id);
+      setMessage({ text: 'Contato removido da equipe.', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
+   };
+
+   const handleMessageTemplateChange = (template: string) => {
+      const templateData = MESSAGE_TEMPLATES.find(item => item.value === template) || MESSAGE_TEMPLATES[0];
+      setMessageForm(prev => ({
+         ...prev,
+         template,
+         message: templateData.text
+      }));
+   };
+
+   const buildProjectMessageText = (member: ProjectTeamMember) => {
+      return [
+         `Olá ${member.name},`,
+         '',
+         messageForm.message,
+         '',
+         `Obra: ${selectedProject?.name}`,
+         `Cliente: ${selectedProject?.clientName}`
+      ].join('\n');
+   };
+
+   const handleSendProjectMessage = async () => {
+      if (!selectedProject || !user?.id || !messageForm.memberId || !messageForm.message.trim()) return;
+
+      const member = selectedProjectTeam.find(item => item.id === messageForm.memberId);
+      if (!member || !member.phone) {
+         setMessage({ text: 'Selecione um contato com WhatsApp cadastrado.', type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      setIsSendingProjectMessage(true);
+      const finalMessage = buildProjectMessageText(member);
+      const { error } = await supabase.from('project_messages').insert([{
+         user_id: user.id,
+         project_id: selectedProject.id,
+         team_member_id: member.id,
+         recipient_name: member.name,
+         recipient_phone: member.phone,
+         channel: 'whatsapp',
+         template: messageForm.template,
+         message: finalMessage
+      }]);
+
+      if (error) {
+         setMessage({ text: 'Erro ao registrar mensagem. Aplique a migration 00013 no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+         setIsSendingProjectMessage(false);
+         return;
+      }
+
+      await fetchProjectMessages(selectedProject.id);
+      window.open(createWhatsappLink(member.phone, finalMessage), '_blank');
+      setMessage({ text: 'Mensagem registrada e WhatsApp aberto.', type: 'success' });
+      setTimeout(() => setMessage(null), 3500);
+      setIsSendingProjectMessage(false);
    };
 
    const resetDocumentForm = () => {
@@ -1852,6 +2100,13 @@ const Projects: React.FC = () => {
                            {activeTab === 'documents' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
                         </button>
                         <button
+                           onClick={() => setActiveTab('communication')}
+                           className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'communication' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                           Comunicação
+                           {activeTab === 'communication' && <div className="absolute bottom-0 left-0 w-full h-1 bg-teal-600 rounded-t-full" />}
+                        </button>
+                        <button
                            onClick={() => setActiveTab('finance')}
                            className={`pb-4 px-4 text-sm font-bold transition-all relative ${activeTab === 'finance' ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'}`}
                         >
@@ -2732,6 +2987,175 @@ const Projects: React.FC = () => {
                                        <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Comece anexando contrato, ART/RRT, alvará ou projeto executivo.</p>
                                     </div>
                                  )}
+                              </div>
+                           </div>
+                        </div>
+                     )}
+
+                     {activeTab === 'communication' && (
+                        <div className="grid gap-6 lg:grid-cols-[420px_1fr] animate-in fade-in duration-300">
+                           <div className="rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-950">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Equipe da obra</p>
+                              <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Novo contato</h3>
+                              <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Cadastre prestadores, fornecedores e responsáveis para avisos rápidos por WhatsApp.</p>
+
+                              <div className="mt-6 space-y-4">
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nome</label>
+                                    <input
+                                       value={teamMemberForm.name}
+                                       onChange={(e) => setTeamMemberForm({ ...teamMemberForm, name: e.target.value })}
+                                       placeholder="Ex: João Eletricista"
+                                       className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+                                 <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Função</label>
+                                       <input
+                                          value={teamMemberForm.role}
+                                          onChange={(e) => setTeamMemberForm({ ...teamMemberForm, role: e.target.value })}
+                                          placeholder="Ex: elétrica"
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       />
+                                    </div>
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">WhatsApp</label>
+                                       <input
+                                          value={teamMemberForm.phone}
+                                          onChange={(e) => setTeamMemberForm({ ...teamMemberForm, phone: e.target.value })}
+                                          placeholder="(00) 00000-0000"
+                                          className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                       />
+                                    </div>
+                                 </div>
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">E-mail</label>
+                                    <input
+                                       value={teamMemberForm.email}
+                                       onChange={(e) => setTeamMemberForm({ ...teamMemberForm, email: e.target.value })}
+                                       placeholder="contato@email.com"
+                                       className="mt-2 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+                                 <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Observações</label>
+                                    <textarea
+                                       value={teamMemberForm.notes}
+                                       onChange={(e) => setTeamMemberForm({ ...teamMemberForm, notes: e.target.value })}
+                                       placeholder="Disponibilidade, escopo contratado ou observações importantes..."
+                                       className="mt-2 h-20 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                    />
+                                 </div>
+                                 <button
+                                    onClick={handleSaveTeamMember}
+                                    disabled={isSavingTeamMember || !teamMemberForm.name.trim()}
+                                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-teal-700 disabled:opacity-50"
+                                 >
+                                    {isSavingTeamMember ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                    {isSavingTeamMember ? 'Salvando...' : 'Adicionar contato'}
+                                 </button>
+                              </div>
+                           </div>
+
+                           <div className="space-y-6">
+                              <div className="rounded-[32px] border border-teal-100 bg-teal-50 p-6 dark:border-teal-900/50 dark:bg-teal-950/20">
+                                 <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Central de comunicação</p>
+                                 <h3 className="mt-2 text-xl font-black text-gray-900 dark:text-white">Enviar aviso por WhatsApp</h3>
+                                 <div className="mt-5 grid gap-3 md:grid-cols-2">
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Destinatário</label>
+                                       <select
+                                          value={messageForm.memberId}
+                                          onChange={(e) => setMessageForm({ ...messageForm, memberId: e.target.value })}
+                                          className="mt-2 w-full rounded-2xl border border-teal-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-teal-900 dark:bg-gray-950 dark:text-white"
+                                       >
+                                          <option value="">Selecionar contato</option>
+                                          {selectedProjectTeam.filter(member => member.phone).map(member => (
+                                             <option key={member.id} value={member.id}>{member.name} - {member.role}</option>
+                                          ))}
+                                       </select>
+                                    </div>
+                                    <div>
+                                       <label className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Modelo</label>
+                                       <select
+                                          value={messageForm.template}
+                                          onChange={(e) => handleMessageTemplateChange(e.target.value)}
+                                          className="mt-2 w-full rounded-2xl border border-teal-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-teal-900 dark:bg-gray-950 dark:text-white"
+                                       >
+                                          {MESSAGE_TEMPLATES.map(template => (
+                                             <option key={template.value} value={template.value}>{template.label}</option>
+                                          ))}
+                                       </select>
+                                    </div>
+                                 </div>
+                                 <textarea
+                                    value={messageForm.message}
+                                    onChange={(e) => setMessageForm({ ...messageForm, message: e.target.value })}
+                                    className="mt-4 h-28 w-full resize-none rounded-2xl border border-teal-100 bg-white px-4 py-3 font-semibold text-gray-900 outline-none dark:border-teal-900 dark:bg-gray-950 dark:text-white"
+                                 />
+                                 <button
+                                    onClick={handleSendProjectMessage}
+                                    disabled={isSendingProjectMessage || !messageForm.memberId || !messageForm.message.trim()}
+                                    className="mt-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                                 >
+                                    {isSendingProjectMessage ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />}
+                                    {isSendingProjectMessage ? 'Registrando...' : 'Enviar WhatsApp'}
+                                 </button>
+                              </div>
+
+                              <div className="grid gap-6 lg:grid-cols-2">
+                                 <div className="rounded-[32px] border border-gray-100 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+                                    <div className="flex items-center justify-between">
+                                       <div>
+                                          <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Envolvidos</p>
+                                          <h4 className="mt-1 text-lg font-black text-gray-900 dark:text-white">{selectedProjectTeam.length} contato(s)</h4>
+                                       </div>
+                                    </div>
+                                    <div className="mt-5 space-y-3">
+                                       {selectedProjectTeam.length ? selectedProjectTeam.map(member => (
+                                          <div key={member.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+                                             <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                   <p className="font-black text-gray-900 dark:text-white">{member.name}</p>
+                                                   <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">{member.role}</p>
+                                                   <p className="mt-1 text-xs font-bold text-gray-500">{member.phone || 'Sem WhatsApp'}{member.email ? ` · ${member.email}` : ''}</p>
+                                                </div>
+                                                <button onClick={() => handleRemoveTeamMember(member)} className="rounded-xl bg-rose-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">Remover</button>
+                                             </div>
+                                             {member.notes && <p className="mt-3 text-sm font-semibold text-gray-500 dark:text-gray-400">{member.notes}</p>}
+                                          </div>
+                                       )) : (
+                                          <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center dark:border-gray-800">
+                                             <p className="text-sm font-black text-gray-900 dark:text-white">Nenhum contato vinculado</p>
+                                             <p className="mt-1 text-xs font-bold text-gray-500">Adicione prestadores e responsáveis da obra.</p>
+                                          </div>
+                                       )}
+                                    </div>
+                                 </div>
+
+                                 <div className="rounded-[32px] border border-gray-100 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Histórico</p>
+                                    <h4 className="mt-1 text-lg font-black text-gray-900 dark:text-white">{selectedProjectMessages.length} mensagem(ns)</h4>
+                                    <div className="mt-5 space-y-3">
+                                       {selectedProjectMessages.length ? selectedProjectMessages.map(message => (
+                                          <div key={message.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+                                             <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                   <p className="font-black text-gray-900 dark:text-white">{message.recipientName}</p>
+                                                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">WhatsApp · {new Date(message.sentAt).toLocaleString()}</p>
+                                                </div>
+                                             </div>
+                                             <p className="mt-3 whitespace-pre-line text-sm font-semibold text-gray-600 dark:text-gray-300">{message.message}</p>
+                                          </div>
+                                       )) : (
+                                          <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center dark:border-gray-800">
+                                             <p className="text-sm font-black text-gray-900 dark:text-white">Nenhuma mensagem registrada</p>
+                                             <p className="mt-1 text-xs font-bold text-gray-500">Envie o primeiro aviso para gerar histórico.</p>
+                                          </div>
+                                       )}
+                                    </div>
+                                 </div>
                               </div>
                            </div>
                         </div>
