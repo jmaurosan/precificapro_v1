@@ -94,6 +94,12 @@ interface DailyReport {
    createdAt: string;
 }
 
+interface DailyPhotoPreview {
+   id: string;
+   file: File;
+   url: string;
+}
+
 const EXECUTION_PLAN_TEMPLATE = [
    {
       title: 'Kickoff e alinhamento de obra',
@@ -213,7 +219,8 @@ const Projects: React.FC = () => {
    const [isCreatingPlan, setIsCreatingPlan] = useState(false);
    const [isSavingDailyReport, setIsSavingDailyReport] = useState(false);
    const [clientReportDays, setClientReportDays] = useState<'7' | '15' | '30' | 'all'>('7');
-   const [dailyPhotoFiles, setDailyPhotoFiles] = useState<File[]>([]);
+   const [dailyPhotoFiles, setDailyPhotoFiles] = useState<DailyPhotoPreview[]>([]);
+   const [dailyPhotoUrls, setDailyPhotoUrls] = useState<Record<string, string>>({});
    const [dailyReportForm, setDailyReportForm] = useState({
       reportDate: new Date().toISOString().split('T')[0],
       weather: 'nao_informado' as DailyReport['weather'],
@@ -308,6 +315,32 @@ const Projects: React.FC = () => {
          fetchDailyReports(selectedProject.id);
       }
    }, [selectedProject]);
+
+   useEffect(() => {
+      const loadPhotoPreviews = async () => {
+         const storedPhotos = selectedProjectReports
+            .flatMap(report => report.photos)
+            .filter(photo => !isExternalPhotoUrl(photo));
+         const missingPhotos = storedPhotos.filter(photo => !dailyPhotoUrls[photo]);
+
+         if (!missingPhotos.length) return;
+
+         const entries = await Promise.all(missingPhotos.map(async (photo) => {
+            try {
+               return [photo, await getDailyPhotoUrl(photo)] as const;
+            } catch {
+               return null;
+            }
+         }));
+
+         const nextUrls = Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, string]>);
+         if (Object.keys(nextUrls).length) {
+            setDailyPhotoUrls(prev => ({ ...prev, ...nextUrls }));
+         }
+      };
+
+      loadPhotoPreviews();
+   }, [selectedProjectReports, dailyPhotoUrls]);
 
    const fetchProjects = async () => {
       setIsLoading(true);
@@ -482,6 +515,7 @@ const Projects: React.FC = () => {
          nextSteps: '',
          photosText: ''
       });
+      dailyPhotoFiles.forEach(photo => URL.revokeObjectURL(photo.url));
       setDailyPhotoFiles([]);
    };
 
@@ -498,7 +532,13 @@ const Projects: React.FC = () => {
          setTimeout(() => setMessage(null), 4500);
       }
 
-      setDailyPhotoFiles(prev => [...prev, ...validFiles].slice(0, 8));
+      const previews = validFiles.map(file => ({
+         id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
+         file,
+         url: URL.createObjectURL(file)
+      }));
+
+      setDailyPhotoFiles(prev => [...prev, ...previews].slice(0, 8));
    };
 
    const handleSaveDailyReport = async () => {
@@ -512,10 +552,10 @@ const Projects: React.FC = () => {
       const uploadedPhotoPaths: string[] = [];
 
       try {
-         for (const file of dailyPhotoFiles) {
-            const filePath = `${user.id}/${selectedProject.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
+         for (const preview of dailyPhotoFiles) {
+            const filePath = `${user.id}/${selectedProject.id}/${Date.now()}-${sanitizeFileName(preview.file.name)}`;
             const { error: uploadError } = await withTimeout(
-               supabase.storage.from('project-daily-photos').upload(filePath, file, {
+               supabase.storage.from('project-daily-photos').upload(filePath, preview.file, {
                   cacheControl: '3600',
                   upsert: false
                }),
@@ -593,6 +633,8 @@ const Projects: React.FC = () => {
    };
 
    const isExternalPhotoUrl = (photo: string) => /^https?:\/\//i.test(photo);
+
+   const getDailyPhotoDisplayUrl = (photo: string) => isExternalPhotoUrl(photo) ? photo : dailyPhotoUrls[photo];
 
    const getDailyPhotoUrl = async (photo: string) => {
       if (isExternalPhotoUrl(photo)) return photo;
@@ -1371,18 +1413,24 @@ const Projects: React.FC = () => {
                                        <input type="file" multiple accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleDailyPhotoSelection} />
                                     </label>
                                     {dailyPhotoFiles.length > 0 && (
-                                       <div className="mt-3 flex flex-wrap gap-2">
-                                          {dailyPhotoFiles.map((file, index) => (
-                                             <span key={`${file.name}-${index}`} className="inline-flex items-center gap-2 rounded-xl bg-teal-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
-                                                {file.name}
+                                       <div className="mt-3 grid grid-cols-2 gap-3">
+                                          {dailyPhotoFiles.map((photo, index) => (
+                                             <div key={photo.id} className="group relative overflow-hidden rounded-2xl border border-teal-100 bg-gray-950 dark:border-teal-900">
+                                                <img src={photo.url} alt={photo.file.name} className="h-28 w-full object-cover opacity-90 transition group-hover:scale-105" />
+                                                <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2">
+                                                   <p className="truncate text-[9px] font-black uppercase tracking-widest text-white">{photo.file.name}</p>
+                                                </div>
                                                 <button
                                                    type="button"
-                                                   onClick={() => setDailyPhotoFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index))}
-                                                   className="text-teal-500 hover:text-rose-500"
+                                                   onClick={() => {
+                                                      URL.revokeObjectURL(photo.url);
+                                                      setDailyPhotoFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index));
+                                                   }}
+                                                   className="absolute right-2 top-2 rounded-full bg-black/70 p-1.5 text-white transition hover:bg-rose-600"
                                                 >
-                                                   <X size={12} />
+                                                   <X size={14} />
                                                 </button>
-                                             </span>
+                                             </div>
                                           ))}
                                        </div>
                                     )}
@@ -1508,12 +1556,24 @@ const Projects: React.FC = () => {
                                                    </div>
                                                 )}
                                                 {report.photos.length > 0 && (
-                                                   <div className="mt-4 flex flex-wrap gap-2">
-                                                      {report.photos.map((photo, index) => (
-                                                         <button key={`${report.id}-${photo}`} onClick={() => handleOpenDailyPhoto(photo)} className="rounded-xl bg-gray-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-600 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300">
-                                                            Foto {index + 1}
+                                                   <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                                      {report.photos.map((photo, index) => {
+                                                         const photoUrl = getDailyPhotoDisplayUrl(photo);
+                                                         return (
+                                                         <button key={`${report.id}-${photo}`} onClick={() => handleOpenDailyPhoto(photo)} className="group overflow-hidden rounded-2xl border border-gray-100 bg-gray-100 text-left transition hover:border-teal-300 dark:border-gray-800 dark:bg-gray-950">
+                                                            {photoUrl ? (
+                                                               <img src={photoUrl} alt={`Foto ${index + 1}`} className="h-28 w-full object-cover transition group-hover:scale-105" />
+                                                            ) : (
+                                                               <div className="flex h-28 w-full items-center justify-center bg-gray-100 text-gray-400 dark:bg-gray-800">
+                                                                  <Camera size={22} />
+                                                               </div>
+                                                            )}
+                                                            <div className="p-2">
+                                                               <p className="text-[9px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">Foto {index + 1}</p>
+                                                            </div>
                                                          </button>
-                                                      ))}
+                                                         );
+                                                      })}
                                                    </div>
                                                 )}
                                              </div>
