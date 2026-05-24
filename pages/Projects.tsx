@@ -146,6 +146,7 @@ interface ProjectDocument {
 interface ProjectTeamMember {
    id: string;
    projectId: string;
+   prestadorId?: string;
    name: string;
    role: string;
    phone?: string;
@@ -165,6 +166,15 @@ interface ProjectMessage {
    template: string;
    message: string;
    sentAt: string;
+}
+
+interface PrestadorOption {
+   id: string;
+   nome: string;
+   ramoAtividade: string;
+   categoriaProfissional: string;
+   email?: string;
+   telefoneCelular?: string;
 }
 
 const MESSAGE_TEMPLATES = [
@@ -327,6 +337,7 @@ const Projects: React.FC = () => {
    const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
    const [teamMembers, setTeamMembers] = useState<ProjectTeamMember[]>([]);
    const [projectMessages, setProjectMessages] = useState<ProjectMessage[]>([]);
+   const [prestadoresOptions, setPrestadoresOptions] = useState<PrestadorOption[]>([]);
 
    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
    const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'tasks' | 'diary' | 'documents' | 'communication' | 'finance' | 'quality'>('overview');
@@ -337,6 +348,7 @@ const Projects: React.FC = () => {
    const [isSavingExecutionTask, setIsSavingExecutionTask] = useState(false);
    const [isSavingDocument, setIsSavingDocument] = useState(false);
    const [isSavingTeamMember, setIsSavingTeamMember] = useState(false);
+   const [isLinkingPrestador, setIsLinkingPrestador] = useState(false);
    const [isSendingProjectMessage, setIsSendingProjectMessage] = useState(false);
    const [clientReportDays, setClientReportDays] = useState<'7' | '15' | '30' | 'all'>('7');
    const [dailyPhotoFiles, setDailyPhotoFiles] = useState<DailyPhotoPreview[]>([]);
@@ -379,6 +391,7 @@ const Projects: React.FC = () => {
       email: '',
       notes: ''
    });
+   const [selectedPrestadorId, setSelectedPrestadorId] = useState('');
    const [messageForm, setMessageForm] = useState({
       memberId: '',
       template: 'livre',
@@ -475,6 +488,10 @@ const Projects: React.FC = () => {
          .filter(message => message.projectId === selectedProject.id)
          .sort((a, b) => b.sentAt.localeCompare(a.sentAt));
    }, [selectedProject, projectMessages]);
+   const availablePrestadoresForProject = useMemo(() => {
+      const linkedPrestadorIds = new Set(selectedProjectTeam.map(member => member.prestadorId).filter(Boolean));
+      return prestadoresOptions.filter(prestador => !linkedPrestadorIds.has(prestador.id));
+   }, [prestadoresOptions, selectedProjectTeam]);
    const selectedProjectReports = useMemo(() => {
       if (!selectedProject) return [];
       return dailyReports
@@ -526,6 +543,7 @@ const Projects: React.FC = () => {
    useEffect(() => {
       if (user) {
          fetchProjects();
+         fetchPrestadoresOptions();
       }
    }, [user]);
 
@@ -767,6 +785,7 @@ const Projects: React.FC = () => {
          ...(data || []).map((member: any) => ({
             id: member.id,
             projectId: member.project_id,
+            prestadorId: member.prestador_id || '',
             name: member.name,
             role: member.role,
             phone: member.phone || '',
@@ -776,6 +795,27 @@ const Projects: React.FC = () => {
             createdAt: member.created_at
          }))
       ]);
+   };
+
+   const fetchPrestadoresOptions = async () => {
+      const { data, error } = await supabase
+         .from('prestadores')
+         .select('id,nome,ramo_atividade,categoria_profissional,email,telefone_celular,status_cadastro')
+         .order('nome', { ascending: true });
+
+      if (error) {
+         console.warn('Prestadores indisponíveis para vínculo:', error.message);
+         return;
+      }
+
+      setPrestadoresOptions((data || []).map((prestador: any) => ({
+         id: prestador.id,
+         nome: prestador.nome,
+         ramoAtividade: prestador.ramo_atividade || '',
+         categoriaProfissional: prestador.categoria_profissional || 'Prestador',
+         email: prestador.email || '',
+         telefoneCelular: prestador.telefone_celular || ''
+      })));
    };
 
    const fetchProjectMessages = async (projectId: string) => {
@@ -808,6 +848,44 @@ const Projects: React.FC = () => {
 
    const resetTeamMemberForm = () => {
       setTeamMemberForm({ name: '', role: '', phone: '', email: '', notes: '' });
+   };
+
+   const handleLinkPrestadorToProject = async () => {
+      if (!selectedProject || !user?.id || !selectedPrestadorId) return;
+
+      const prestador = prestadoresOptions.find(item => item.id === selectedPrestadorId);
+      if (!prestador) return;
+
+      if (selectedProjectTeam.some(member => member.prestadorId === prestador.id)) {
+         setMessage({ text: 'Este prestador já está vinculado à equipe desta obra.', type: 'error' });
+         setTimeout(() => setMessage(null), 4500);
+         return;
+      }
+
+      setIsLinkingPrestador(true);
+      const { error } = await supabase.from('project_team_members').insert([{
+         user_id: user.id,
+         project_id: selectedProject.id,
+         prestador_id: prestador.id,
+         name: prestador.nome,
+         role: prestador.ramoAtividade || prestador.categoriaProfissional || 'Prestador',
+         phone: prestador.telefoneCelular || null,
+         email: prestador.email || null,
+         notes: `Vinculado ao cadastro de prestadores (${prestador.categoriaProfissional || 'Prestador'}).`,
+         is_primary: false
+      }]);
+
+      if (error) {
+         setMessage({ text: 'Erro ao vincular prestador. Aplique a migration 00014 no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+      } else {
+         await fetchProjectTeam(selectedProject.id);
+         setSelectedPrestadorId('');
+         setMessage({ text: 'Prestador vinculado à equipe da obra.', type: 'success' });
+         setTimeout(() => setMessage(null), 3000);
+      }
+
+      setIsLinkingPrestador(false);
    };
 
    const handleSaveTeamMember = async () => {
@@ -3000,6 +3078,33 @@ const Projects: React.FC = () => {
                               <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">Cadastre prestadores, fornecedores e responsáveis para avisos rápidos por WhatsApp.</p>
 
                               <div className="mt-6 space-y-4">
+                                 <div className="rounded-3xl border border-teal-100 bg-teal-50 p-4 dark:border-teal-900/50 dark:bg-teal-950/20">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Prestador cadastrado</label>
+                                    <select
+                                       value={selectedPrestadorId}
+                                       onChange={(e) => setSelectedPrestadorId(e.target.value)}
+                                       className="mt-2 w-full rounded-2xl border border-teal-100 bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:border-teal-900 dark:bg-gray-950 dark:text-white"
+                                    >
+                                       <option value="">Selecionar prestador do cadastro</option>
+                                       {availablePrestadoresForProject.map(prestador => (
+                                          <option key={prestador.id} value={prestador.id}>
+                                             {prestador.nome} - {prestador.ramoAtividade || prestador.categoriaProfissional}
+                                          </option>
+                                       ))}
+                                    </select>
+                                    <button
+                                       onClick={handleLinkPrestadorToProject}
+                                       disabled={isLinkingPrestador || !selectedPrestadorId}
+                                       className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-teal-700 disabled:opacity-50"
+                                    >
+                                       {isLinkingPrestador ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                                       {isLinkingPrestador ? 'Vinculando...' : 'Vincular prestador'}
+                                    </button>
+                                    <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-teal-700/70 dark:text-teal-300/70">
+                                       Ou preencha um contato avulso abaixo
+                                    </p>
+                                 </div>
+
                                  <div>
                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nome</label>
                                     <input
@@ -3117,8 +3222,15 @@ const Projects: React.FC = () => {
                                           <div key={member.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
                                              <div className="flex items-start justify-between gap-3">
                                                 <div>
-                                                   <p className="font-black text-gray-900 dark:text-white">{member.name}</p>
-                                                   <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">{member.role}</p>
+                                                   <div className="flex flex-wrap items-center gap-2">
+                                                      <p className="font-black text-gray-900 dark:text-white">{member.name}</p>
+                                                      {member.prestadorId && (
+                                                         <span className="rounded-full bg-teal-100 px-2 py-1 text-[8px] font-black uppercase tracking-widest text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
+                                                            Cadastro
+                                                         </span>
+                                                      )}
+                                                   </div>
+                                                   <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-teal-600">{member.role}</p>
                                                    <p className="mt-1 text-xs font-bold text-gray-500">{member.phone || 'Sem WhatsApp'}{member.email ? ` · ${member.email}` : ''}</p>
                                                 </div>
                                                 <button onClick={() => handleRemoveTeamMember(member)} className="rounded-xl bg-rose-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">Remover</button>
