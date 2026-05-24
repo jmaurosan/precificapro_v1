@@ -4,7 +4,8 @@ import {
   Plus, Search, HardHat, Star, Mail, Phone,
   ChevronRight, CheckCircle2, X, Building2, User as UserIcon,
   Droplets, Brush, Layers, Hammer, Edit2, Trash2,
-  Briefcase, Ruler, Zap, Scissors, Shovel, Info, AlertCircle, Loader2
+  Briefcase, Ruler, Zap, Scissors, Shovel, Info, AlertCircle, Loader2,
+  CalendarDays
 } from 'lucide-react';
 import { Prestador, TipoPessoa } from '../types';
 import { useAuth } from '../hooks/useAuth';
@@ -23,6 +24,16 @@ const INITIAL_RAMOS = [
   'Azulejista/Revestimentos'
 ];
 
+interface ProviderProjectHistory {
+  id: string;
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  projectStatus: string;
+  role: string;
+  linkedAt: string;
+}
+
 const Providers: React.FC = () => {
   const { user } = useAuth();
   const [providers, setProviders] = useState<Prestador[]>([]);
@@ -31,6 +42,8 @@ const Providers: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [showDossieModal, setShowDossieModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<Prestador | null>(null);
+  const [providerProjectHistory, setProviderProjectHistory] = useState<ProviderProjectHistory[]>([]);
+  const [isLoadingProviderHistory, setIsLoadingProviderHistory] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCustomRamo, setIsCustomRamo] = useState(false);
 
@@ -89,6 +102,46 @@ const Providers: React.FC = () => {
     setIsLoading(false);
   };
 
+  const fetchProviderProjectHistory = async (providerId: string) => {
+    setIsLoadingProviderHistory(true);
+    const { data, error } = await supabase
+      .from('project_team_members')
+      .select(`
+        id,
+        project_id,
+        role,
+        created_at,
+        projects (
+          name,
+          client_name,
+          status
+        )
+      `)
+      .eq('prestador_id', providerId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Histórico de obras do prestador indisponível:', error.message);
+      setProviderProjectHistory([]);
+      setIsLoadingProviderHistory(false);
+      return;
+    }
+
+    setProviderProjectHistory((data || []).map((item: any) => {
+      const project = Array.isArray(item.projects) ? item.projects[0] : item.projects;
+      return {
+        id: item.id,
+        projectId: item.project_id,
+        projectName: project?.name || 'Obra não encontrada',
+        clientName: project?.client_name || 'Cliente não informado',
+        projectStatus: project?.status || 'active',
+        role: item.role || 'Equipe',
+        linkedAt: item.created_at
+      };
+    }));
+    setIsLoadingProviderHistory(false);
+  };
+
   const initialFormState: Partial<Prestador> = {
     tipoCadastro: 'PF',
     nome: '',
@@ -116,6 +169,13 @@ const Providers: React.FC = () => {
     setFormData(initialFormState);
     setIsCustomRamo(false);
     setShowModal(true);
+  };
+
+  const handleOpenDossie = (provider: Prestador) => {
+    setSelectedProvider(provider);
+    setProviderProjectHistory([]);
+    setShowDossieModal(true);
+    fetchProviderProjectHistory(provider.id);
   };
 
   const handleToggleEspecialidade = (esp: string) => {
@@ -257,7 +317,7 @@ const Providers: React.FC = () => {
                </div>
             </div>
 
-            <button onClick={() => { setSelectedProvider(provider); setShowDossieModal(true); }} className="w-full py-3 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2">Dossiê Profissional <ChevronRight size={14} /></button>
+            <button onClick={() => handleOpenDossie(provider)} className="w-full py-3 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2">Dossiê Profissional <ChevronRight size={14} /></button>
           </div>
         ))
         )}
@@ -463,6 +523,55 @@ const Providers: React.FC = () => {
                         ))}
                         {selectedProvider.especialidades.length === 0 && <span className="text-xs italic text-gray-400">Nenhuma especialidade listada.</span>}
                      </div>
+                  </div>
+               </div>
+               <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                      <Building2 size={14} className="text-emerald-500" />
+                      Histórico em obras
+                    </h4>
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                      {providerProjectHistory.length} vínculo(s)
+                    </span>
+                  </div>
+
+                  <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900">
+                    {isLoadingProviderHistory ? (
+                      <div className="flex items-center justify-center gap-3 py-8 text-sm font-bold text-gray-500">
+                        <Loader2 size={18} className="animate-spin text-emerald-500" />
+                        Carregando histórico...
+                      </div>
+                    ) : providerProjectHistory.length ? (
+                      <div className="space-y-3">
+                        {providerProjectHistory.map(history => (
+                          <div key={history.id} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="font-black text-gray-900 dark:text-white">{history.projectName}</p>
+                                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">{history.role}</p>
+                                <p className="mt-2 text-xs font-bold text-gray-500">{history.clientName}</p>
+                              </div>
+                              <div className="text-left sm:text-right">
+                                <span className="rounded-full bg-gray-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-gray-500 dark:bg-gray-800">
+                                  {history.projectStatus === 'completed' ? 'Concluída' : history.projectStatus === 'on_hold' ? 'Pausada' : 'Ativa'}
+                                </span>
+                                <p className="mt-2 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:justify-end">
+                                  <CalendarDays size={12} />
+                                  {new Date(history.linkedAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-8 text-center">
+                        <Building2 size={28} className="mx-auto text-gray-300" />
+                        <p className="mt-3 text-sm font-black text-gray-900 dark:text-white">Nenhuma obra vinculada ainda</p>
+                        <p className="mt-1 text-xs font-bold text-gray-500">Vincule este prestador na aba Comunicação de uma obra para formar o histórico.</p>
+                      </div>
+                    )}
                   </div>
                </div>
             </div>
