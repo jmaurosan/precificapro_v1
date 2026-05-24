@@ -143,6 +143,8 @@ interface ProjectDocument {
    validityStatus: 'valido' | 'proximo_vencimento' | 'vencido';
 }
 
+type TeamContractStatus = 'cotado' | 'contratado' | 'em_execucao' | 'concluido' | 'cancelado';
+
 interface ProjectTeamMember {
    id: string;
    projectId: string;
@@ -152,6 +154,10 @@ interface ProjectTeamMember {
    phone?: string;
    email?: string;
    notes?: string;
+   contractStatus: TeamContractStatus;
+   agreedValue: number;
+   estimatedStartDate?: string;
+   scopeNotes?: string;
    isPrimary: boolean;
    createdAt: string;
 }
@@ -175,6 +181,13 @@ interface PrestadorOption {
    categoriaProfissional: string;
    email?: string;
    telefoneCelular?: string;
+}
+
+interface TeamContractEdit {
+   contractStatus: TeamContractStatus;
+   agreedValue: string;
+   estimatedStartDate: string;
+   scopeNotes: string;
 }
 
 const MESSAGE_TEMPLATES = [
@@ -209,6 +222,14 @@ const MESSAGE_TEMPLATES = [
       text: 'Olá, existe um documento pendente relacionado à obra. Por favor providencie ou confirme o envio.'
    }
 ];
+
+const TEAM_CONTRACT_STATUS = [
+   { value: 'cotado', label: 'Cotado' },
+   { value: 'contratado', label: 'Contratado' },
+   { value: 'em_execucao', label: 'Em execução' },
+   { value: 'concluido', label: 'Concluído' },
+   { value: 'cancelado', label: 'Cancelado' }
+] satisfies Array<{ value: TeamContractStatus; label: string }>;
 
 const PROJECT_DOCUMENT_CATEGORIES: { value: ProjectDocumentCategory; label: string; description: string }[] = [
    { value: 'contratos', label: 'Contrato', description: 'Contrato, aditivo ou termo assinado.' },
@@ -391,6 +412,7 @@ const Projects: React.FC = () => {
       email: '',
       notes: ''
    });
+   const [teamContractEdits, setTeamContractEdits] = useState<Record<string, TeamContractEdit>>({});
    const [selectedPrestadorId, setSelectedPrestadorId] = useState('');
    const [messageForm, setMessageForm] = useState({
       memberId: '',
@@ -791,6 +813,10 @@ const Projects: React.FC = () => {
             phone: member.phone || '',
             email: member.email || '',
             notes: member.notes || '',
+            contractStatus: member.contract_status || 'cotado',
+            agreedValue: Number(member.agreed_value || 0),
+            estimatedStartDate: member.estimated_start_date || '',
+            scopeNotes: member.scope_notes || '',
             isPrimary: Boolean(member.is_primary),
             createdAt: member.created_at
          }))
@@ -872,11 +898,13 @@ const Projects: React.FC = () => {
          phone: prestador.telefoneCelular || null,
          email: prestador.email || null,
          notes: `Vinculado ao cadastro de prestadores (${prestador.categoriaProfissional || 'Prestador'}).`,
+         contract_status: 'cotado',
+         agreed_value: 0,
          is_primary: false
       }]);
 
       if (error) {
-         setMessage({ text: 'Erro ao vincular prestador. Aplique a migration 00014 no Supabase.', type: 'error' });
+         setMessage({ text: 'Erro ao vincular prestador. Aplique as migrations 00014 e 00015 no Supabase.', type: 'error' });
          setTimeout(() => setMessage(null), 6500);
       } else {
          await fetchProjectTeam(selectedProject.id);
@@ -928,6 +956,55 @@ const Projects: React.FC = () => {
 
       await fetchProjectTeam(selectedProject.id);
       setMessage({ text: 'Contato removido da equipe.', type: 'success' });
+      setTimeout(() => setMessage(null), 3000);
+   };
+
+   const getTeamContractEdit = (member: ProjectTeamMember) => {
+      return teamContractEdits[member.id] || {
+         contractStatus: member.contractStatus,
+         agreedValue: member.agreedValue ? formatInputCurrency(String(member.agreedValue * 100)) : '',
+         estimatedStartDate: member.estimatedStartDate || '',
+         scopeNotes: member.scopeNotes || ''
+      };
+   };
+
+   const handleTeamContractEditChange = (member: ProjectTeamMember, patch: Partial<TeamContractEdit>) => {
+      setTeamContractEdits(prev => ({
+         ...prev,
+         [member.id]: {
+            ...getTeamContractEdit(member),
+            ...patch
+         }
+      }));
+   };
+
+   const handleSaveTeamContract = async (member: ProjectTeamMember) => {
+      if (!selectedProject) return;
+
+      const edit = getTeamContractEdit(member);
+      const { error } = await supabase
+         .from('project_team_members')
+         .update({
+            contract_status: edit.contractStatus,
+            agreed_value: parseCurrency(edit.agreedValue),
+            estimated_start_date: edit.estimatedStartDate || null,
+            scope_notes: edit.scopeNotes.trim() || null
+         })
+         .eq('id', member.id);
+
+      if (error) {
+         setMessage({ text: 'Erro ao salvar contratação. Aplique a migration 00015 no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+         return;
+      }
+
+      setTeamContractEdits(prev => {
+         const next = { ...prev };
+         delete next[member.id];
+         return next;
+      });
+      await fetchProjectTeam(selectedProject.id);
+      setMessage({ text: 'Contratação do prestador atualizada.', type: 'success' });
       setTimeout(() => setMessage(null), 3000);
    };
 
@@ -3218,7 +3295,9 @@ const Projects: React.FC = () => {
                                        </div>
                                     </div>
                                     <div className="mt-5 space-y-3">
-                                       {selectedProjectTeam.length ? selectedProjectTeam.map(member => (
+                                       {selectedProjectTeam.length ? selectedProjectTeam.map(member => {
+                                          const contractEdit = getTeamContractEdit(member);
+                                          return (
                                           <div key={member.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
                                              <div className="flex items-start justify-between gap-3">
                                                 <div>
@@ -3235,9 +3314,56 @@ const Projects: React.FC = () => {
                                                 </div>
                                                 <button onClick={() => handleRemoveTeamMember(member)} className="rounded-xl bg-rose-50 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">Remover</button>
                                              </div>
+                                             <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
+                                                <div className="grid gap-3 sm:grid-cols-3">
+                                                   <div>
+                                                      <label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Contratação</label>
+                                                      <select
+                                                         value={contractEdit.contractStatus}
+                                                         onChange={(e) => handleTeamContractEditChange(member, { contractStatus: e.target.value as TeamContractStatus })}
+                                                         className="mt-1 w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-black text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-950 dark:text-white"
+                                                      >
+                                                         {TEAM_CONTRACT_STATUS.map(status => (
+                                                            <option key={status.value} value={status.value}>{status.label}</option>
+                                                         ))}
+                                                      </select>
+                                                   </div>
+                                                   <div>
+                                                      <label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Valor combinado</label>
+                                                      <input
+                                                         value={contractEdit.agreedValue}
+                                                         onChange={(e) => handleTeamContractEditChange(member, { agreedValue: formatInputCurrency(e.target.value) })}
+                                                         placeholder="0,00"
+                                                         className="mt-1 w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-black text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-950 dark:text-white"
+                                                      />
+                                                   </div>
+                                                   <div>
+                                                      <label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Início previsto</label>
+                                                      <input
+                                                         type="date"
+                                                         value={contractEdit.estimatedStartDate}
+                                                         onChange={(e) => handleTeamContractEditChange(member, { estimatedStartDate: e.target.value })}
+                                                         className="mt-1 w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-black text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-950 dark:text-white"
+                                                      />
+                                                   </div>
+                                                </div>
+                                                <textarea
+                                                   value={contractEdit.scopeNotes}
+                                                   onChange={(e) => handleTeamContractEditChange(member, { scopeNotes: e.target.value })}
+                                                   placeholder="Escopo contratado, condições, forma de pagamento ou observações..."
+                                                   className="mt-3 h-16 w-full resize-none rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-900 outline-none dark:border-gray-800 dark:bg-gray-950 dark:text-white"
+                                                />
+                                                <button
+                                                   onClick={() => handleSaveTeamContract(member)}
+                                                   className="mt-3 rounded-xl bg-gray-950 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-white transition hover:opacity-90 dark:bg-white dark:text-gray-950"
+                                                >
+                                                   Salvar contratação
+                                                </button>
+                                             </div>
                                              {member.notes && <p className="mt-3 text-sm font-semibold text-gray-500 dark:text-gray-400">{member.notes}</p>}
                                           </div>
-                                       )) : (
+                                          );
+                                       }) : (
                                           <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center dark:border-gray-800">
                                              <p className="text-sm font-black text-gray-900 dark:text-white">Nenhum contato vinculado</p>
                                              <p className="mt-1 text-xs font-bold text-gray-500">Adicione prestadores e responsáveis da obra.</p>

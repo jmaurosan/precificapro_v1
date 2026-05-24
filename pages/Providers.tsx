@@ -24,6 +24,22 @@ const INITIAL_RAMOS = [
   'Azulejista/Revestimentos'
 ];
 
+const formatBRL = (value: number) => value.toLocaleString('pt-BR', {
+  style: 'currency',
+  currency: 'BRL'
+});
+
+const formatContractStatus = (status: string) => {
+  const labels: Record<string, string> = {
+    cotado: 'Cotado',
+    contratado: 'Contratado',
+    em_execucao: 'Em execução',
+    concluido: 'Concluído',
+    cancelado: 'Cancelado'
+  };
+  return labels[status] || 'Cotado';
+};
+
 interface ProviderProjectHistory {
   id: string;
   projectId: string;
@@ -31,6 +47,10 @@ interface ProviderProjectHistory {
   clientName: string;
   projectStatus: string;
   role: string;
+  contractStatus: string;
+  agreedValue: number;
+  estimatedStartDate?: string;
+  scopeNotes?: string;
   linkedAt: string;
 }
 
@@ -110,6 +130,10 @@ const Providers: React.FC = () => {
         id,
         project_id,
         role,
+        contract_status,
+        agreed_value,
+        estimated_start_date,
+        scope_notes,
         created_at,
         projects (
           name,
@@ -136,6 +160,10 @@ const Providers: React.FC = () => {
         clientName: project?.client_name || 'Cliente não informado',
         projectStatus: project?.status || 'active',
         role: item.role || 'Equipe',
+        contractStatus: item.contract_status || 'cotado',
+        agreedValue: Number(item.agreed_value || 0),
+        estimatedStartDate: item.estimated_start_date || '',
+        scopeNotes: item.scope_notes || '',
         linkedAt: item.created_at
       };
     }));
@@ -551,11 +579,25 @@ const Providers: React.FC = () => {
                                 <p className="font-black text-gray-900 dark:text-white">{history.projectName}</p>
                                 <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">{history.role}</p>
                                 <p className="mt-2 text-xs font-bold text-gray-500">{history.clientName}</p>
+                                {history.scopeNotes && <p className="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">{history.scopeNotes}</p>}
                               </div>
                               <div className="text-left sm:text-right">
-                                <span className="rounded-full bg-gray-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-gray-500 dark:bg-gray-800">
-                                  {history.projectStatus === 'completed' ? 'Concluída' : history.projectStatus === 'on_hold' ? 'Pausada' : 'Ativa'}
-                                </span>
+                                <div className="flex flex-wrap gap-2 sm:justify-end">
+                                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                                    {formatContractStatus(history.contractStatus)}
+                                  </span>
+                                  <span className="rounded-full bg-gray-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-gray-500 dark:bg-gray-800">
+                                    {history.projectStatus === 'completed' ? 'Obra concluída' : history.projectStatus === 'on_hold' ? 'Obra pausada' : 'Obra ativa'}
+                                  </span>
+                                </div>
+                                <p className="mt-2 text-xs font-black text-gray-900 dark:text-white">
+                                  {history.agreedValue ? formatBRL(history.agreedValue) : 'Valor não informado'}
+                                </p>
+                                {history.estimatedStartDate && (
+                                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                    Início: {new Date(`${history.estimatedStartDate}T00:00:00`).toLocaleDateString()}
+                                  </p>
+                                )}
                                 <p className="mt-2 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:justify-end">
                                   <CalendarDays size={12} />
                                   {new Date(history.linkedAt).toLocaleDateString()}
