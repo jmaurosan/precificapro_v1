@@ -510,6 +510,14 @@ const Projects: React.FC = () => {
          .filter(message => message.projectId === selectedProject.id)
          .sort((a, b) => b.sentAt.localeCompare(a.sentAt));
    }, [selectedProject, projectMessages]);
+   const selectedProjectTeamCostMemberIds = useMemo(() => {
+      if (!selectedProject) return new Set<string>();
+      return new Set(
+         custos
+            .filter(custo => custo.projetoId === selectedProject.id && custo.projectTeamMemberId)
+            .map(custo => custo.projectTeamMemberId as string)
+      );
+   }, [selectedProject, custos]);
    const availablePrestadoresForProject = useMemo(() => {
       const linkedPrestadorIds = new Set(selectedProjectTeam.map(member => member.prestadorId).filter(Boolean));
       return prestadoresOptions.filter(prestador => !linkedPrestadorIds.has(prestador.id));
@@ -652,9 +660,12 @@ const Projects: React.FC = () => {
          setCustos(data.map(c => ({
             ...c,
             projetoId: c.project_id,
+            projectTeamMemberId: c.project_team_member_id || '',
             custoUnitario: Number(c.custo_unitario),
             custoTotal: Number(c.custo_total),
             dataLancamento: c.data_lancamento,
+            dataVencimento: c.data_vencimento || '',
+            prestadorId: c.prestador_id || '',
             prestadorNome: c.prestador_nome
          })) as CustoProjeto[]);
       }
@@ -978,6 +989,47 @@ const Projects: React.FC = () => {
       }));
    };
 
+   const syncTeamContractCost = async (member: ProjectTeamMember, edit: TeamContractEdit) => {
+      if (!selectedProject || !user?.id || !member.prestadorId) return { error: null };
+
+      const agreedValue = parseCurrency(edit.agreedValue);
+      if (agreedValue <= 0) return { error: null };
+
+      const costStatus: StatusCusto = edit.contractStatus === 'cancelado'
+         ? 'cancelado'
+         : edit.contractStatus === 'cotado'
+            ? 'planejado'
+            : 'confirmado';
+
+      const payload = {
+         user_id: user.id,
+         project_id: selectedProject.id,
+         project_team_member_id: member.id,
+         descricao: `Mão de obra - ${member.name}`,
+         categoria: 'mao_de_obra' as CategoriaCusto,
+         quantidade: 1,
+         unidade: 'serv',
+         custo_unitario: agreedValue,
+         custo_total: agreedValue,
+         prestador_id: member.prestadorId,
+         prestador_nome: member.name,
+         data_lancamento: new Date().toISOString().split('T')[0],
+         data_vencimento: edit.estimatedStartDate || null,
+         status: costStatus,
+         observacoes: [
+            `Gerado pela contratação da equipe da obra.`,
+            `Status da contratação: ${TEAM_CONTRACT_STATUS.find(status => status.value === edit.contractStatus)?.label || 'Cotado'}.`,
+            edit.scopeNotes.trim()
+         ].filter(Boolean).join('\n')
+      };
+
+      const { error } = await supabase
+         .from('custos_projeto')
+         .upsert(payload, { onConflict: 'project_team_member_id' });
+
+      return { error };
+   };
+
    const handleSaveTeamContract = async (member: ProjectTeamMember) => {
       if (!selectedProject) return;
 
@@ -998,13 +1050,22 @@ const Projects: React.FC = () => {
          return;
       }
 
+      const { error: costError } = await syncTeamContractCost(member, edit);
+      if (costError) {
+         setMessage({ text: 'Contratação salva, mas não foi possível gerar o custo. Aplique a migration 00016 no Supabase.', type: 'error' });
+         setTimeout(() => setMessage(null), 6500);
+         await fetchProjectTeam(selectedProject.id);
+         return;
+      }
+
       setTeamContractEdits(prev => {
          const next = { ...prev };
          delete next[member.id];
          return next;
       });
       await fetchProjectTeam(selectedProject.id);
-      setMessage({ text: 'Contratação do prestador atualizada.', type: 'success' });
+      await fetchCosts(selectedProject.id);
+      setMessage({ text: 'Contratação atualizada e custo da obra sincronizado.', type: 'success' });
       setTimeout(() => setMessage(null), 3000);
    };
 
@@ -3306,6 +3367,11 @@ const Projects: React.FC = () => {
                                                       {member.prestadorId && (
                                                          <span className="rounded-full bg-teal-100 px-2 py-1 text-[8px] font-black uppercase tracking-widest text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
                                                             Cadastro
+                                                         </span>
+                                                      )}
+                                                      {selectedProjectTeamCostMemberIds.has(member.id) && (
+                                                         <span className="rounded-full bg-emerald-100 px-2 py-1 text-[8px] font-black uppercase tracking-widest text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                                            Custo gerado
                                                          </span>
                                                       )}
                                                    </div>

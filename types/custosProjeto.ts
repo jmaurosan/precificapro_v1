@@ -12,6 +12,7 @@ export type StatusCusto = 'planejado' | 'confirmado' | 'pago' | 'cancelado';
 export interface CustoProjeto {
   id: string;
   projetoId: string;
+  projectTeamMemberId?: string;
   descricao: string;
   categoria: CategoriaCusto;
   quantidade: number;
