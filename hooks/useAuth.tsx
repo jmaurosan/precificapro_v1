@@ -32,37 +32,56 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    const loadingTimeout = window.setTimeout(() => {
+      if (isMounted) {
+        console.warn('Auth loading timeout reached. Releasing application shell.');
+        setIsLoading(false);
+      }
+    }, 10000);
+
+    const finishLoading = () => {
+      window.clearTimeout(loadingTimeout);
+      if (isMounted) setIsLoading(false);
+    };
+
     // 1. Verificar sessão atual
     const checkSession = async () => {
       try {
         const { data } = await supabase.auth.getSession();
+        if (!isMounted) return;
         if (data?.session) {
           await fetchProfile(data.session.user.id, data.session.user.email!);
         } else {
-          setIsLoading(false);
+          finishLoading();
         }
       } catch (error) {
         console.error("Auth session check failed:", error);
-        setIsLoading(false);
+        finishLoading();
       }
     };
 
     checkSession();
 
     // 2. Ouvir mudanças de estado de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        const fullName = typeof session.user.user_metadata?.full_name === 'string'
-          ? session.user.user_metadata.full_name
-          : undefined;
-        await fetchProfile(session.user.id, session.user.email!, fullName);
-      } else {
-        setUser(null);
-        setIsLoading(false);
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(async () => {
+        if (!isMounted) return;
+        if (session) {
+          const fullName = typeof session.user.user_metadata?.full_name === 'string'
+            ? session.user.user_metadata.full_name
+            : undefined;
+          await fetchProfile(session.user.id, session.user.email!, fullName);
+        } else {
+          setUser(null);
+          finishLoading();
+        }
+      }, 0);
     });
 
     return () => {
+      isMounted = false;
+      window.clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, []);
